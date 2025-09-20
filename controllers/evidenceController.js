@@ -7,70 +7,88 @@ function generateHash(data) {
   return crypto.createHash("sha256").update(JSON.stringify(data)).digest("hex");
 }
 
+// Transform raw frontend payload → backend schema
+function transformPayload(payload) {
+  const ecosystemTypeMap = {
+    mangroves: "mangrove",
+    seagrass: "seagrass",
+    saltMarsh: "salt_marsh",
+  };
+  const ecosystemType = ecosystemTypeMap[payload.ecosystemType] || payload.ecosystemType;
+
+  // GPS
+  const gps = {
+    latitude: Number(payload.location?.lat || 0),
+    longitude: Number(payload.location?.lng || 0),
+    precision: Number(payload.gpsPrecision || 5),
+  };
+
+  let mangroveData, seagrassData, saltMarshData;
+  if (ecosystemType === "mangrove") {
+    mangroveData = {
+      species: payload.plantationSpecies || [],
+      treeCount: Number(payload.treeCount || 0),
+      avgDBHcm: Number(payload.averageBreadth || payload.averageLength || 0),
+      avgHeightM: Number(payload.averageHeight || 0),
+      seedlingsCount: Number(payload.seedlings || 0),
+      soilCarbonContentPercent: payload.soilCarbonContentPercent || undefined,
+    };
+  } else if (ecosystemType === "seagrass") {
+    seagrassData = {
+      species: payload.plantationSpecies || [],
+      meadowAreaM2: Number(payload.area || 0),
+      shootDensity: Number(payload.density || 0),
+      biomassKgPerM2: Number(payload.biomass || 0),
+      soilCarbonContentPercent: payload.soilCarbonContentPercent || undefined,
+    };
+  } else if (ecosystemType === "salt_marsh") {
+    saltMarshData = {
+      species: payload.plantationSpecies || [],
+      areaM2: Number(payload.area || 0),
+      vegetationHeightM: Number(payload.averageHeight || 0),
+      biomassKgPerM2: Number(payload.biomass || 0),
+      soilCarbonContentPercent: payload.soilCarbonContentPercent || undefined,
+    };
+  }
+
+  return {
+    projectId: payload.projectId,
+    plotId: payload.plotId,
+    timestampISO: payload.timestampISO || new Date().toISOString(),
+    gps,
+    photos: (payload.documents || []).map(doc => doc.name),
+    videos: (payload.videos || []).map(video => video.name),
+    ecosystemType,
+    mangroveData,
+    seagrassData,
+    saltMarshData,
+    soilCores: payload.soilCores || [],
+    sensorReadings: payload.sensorReadings || {},
+    co2Estimate: Number(payload.estimatedCO2Sequestration || 0),
+  };
+}
+
 // @desc Submit field evidence for a project
 // @route POST /api/evidence
 // @access Inspector
 exports.submitEvidence = async (req, res) => {
   try {
-    const {
-      projectId,
-      plotId,
-      timestampISO,
-      gps,
-      photos,
-      videos,
-      ecosystemType,
-      mangroveData,
-      seagrassData,
-      saltMarshData,
-      soilCores,
-      sensorReadings,
-      co2Estimate,
-    } = req.body;
+    const payload = transformPayload(req.body);
 
     // Check if project exists
-    const project = await Project.findById(projectId);
+    const project = await Project.findById(payload.projectId);
     if (!project) {
       return res.status(404).json({ message: "Project not found" });
     }
 
-    // Prepare evidence payload to hash (immutable data snapshot)
-    const evidencePayload = {
-      projectId,
-      plotId,
-      timestampISO,
-      gps,
-      ecosystemType,
-      mangroveData,
-      seagrassData,
-      saltMarshData,
-      soilCores,
-      sensorReadings,
-      co2Estimate,
-      photos,
-      videos,
-    };
-
     // Generate hash for immutability
-    const evidenceHash = generateHash(evidencePayload);
+    const evidenceHash = generateHash(payload);
 
     // Create the evidence document
     const evidence = await Evidence.create({
-      projectId,
-      plotId,
-      timestampISO,
-      gps,
-      photos,
-      videos,
-      ecosystemType,
-      mangroveData,
-      seagrassData,
-      saltMarshData,
-      soilCores,
-      sensorReadings,
-      co2Estimate,
+      ...payload,
       evidenceHash,
-      inspector: req.user._id, // auth middleware fills this
+      inspector: req.user._id,
     });
 
     res.status(201).json({

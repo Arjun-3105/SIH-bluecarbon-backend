@@ -17,6 +17,7 @@ app.use(cors({
 // Routes
 app.use("/api/auth", require("./routes/userRoutes"));
 app.use("/api/evidence", require("./routes/evidenceRoutes"));
+app.use("/api/projects", require("./routes/projectRoutes"));
 
 // MongoDB connect
 mongoose.connect(process.env.MONGODB_URI)
