@@ -18,7 +18,7 @@ const mangroveDataSchema = new mongoose.Schema({
 const seagrassDataSchema = new mongoose.Schema({
   species: [String],            // seagrass species present
   meadowAreaM2: Number,
-  shootDensity: Number,         // shoots per m²
+  shootDensity: Number,         // shoots per m²-
   biomassKgPerM2: Number,
   soilCarbonContentPercent: Number,
 });

@@ -4,17 +4,32 @@
   "main": "server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js"
+    "start": "node server.js",
+    "compile": "hardhat compile",
+    "deploy": "hardhat run scripts/deploy.js --network sepolia",
+    "deploy:local": "hardhat run scripts/deploy.js --network localhost",
+    "migrate": "node scripts/migrateSampleData.js",
+    "test:blockchain": "node scripts/testBlockchain.js",
+    "dev": "nodemon server.js"
   },
   "author": "",
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "axios": "^1.6.2",
     "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
     "dotenv": "^17.2.2",
+    "ethers": "^6.8.1",
     "express": "^5.1.0",
+    "ipfs-http-client": "^60.0.1",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.18.1"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+    "@openzeppelin/contracts": "^5.4.0",
+    "hardhat": "^2.26.3",
+    "nodemon": "^3.0.2"
   }
 }

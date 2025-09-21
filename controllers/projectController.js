@@ -35,7 +35,7 @@ exports.getProjectById = async (req, res) => {
 
     if (
       (req.user.role === "Register" && project.createdBy.toString() !== req.user.id) ||
-      (req.user.role === "Inspector" && project.assignedInspector.toString() !== req.user.id)
+      (req.user.role === "Owner" && project.assignedInspector.toString() !== req.user.id)
     ) {
       return res.status(403).json({ message: "Access denied: not your project." });
     }

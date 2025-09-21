@@ -18,6 +18,7 @@ app.use(cors({
 app.use("/api/auth", require("./routes/userRoutes"));
 app.use("/api/evidence", require("./routes/evidenceRoutes"));
 app.use("/api/projects", require("./routes/projectRoutes"));
+app.use("/api/blockchain", require("./routes/blockchainRoutes"));
 
 // MongoDB connect
 mongoose.connect(process.env.MONGODB_URI)
