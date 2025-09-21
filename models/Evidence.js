@@ -32,10 +32,10 @@ const saltMarshDataSchema = new mongoose.Schema({
 });
 
 const blueCarbonSchema = new mongoose.Schema({
-  projectId: { type: mongoose.Schema.Types.ObjectId, ref: "Project" },
+  projectId: { type: String, ref: "Project" },
   plotId: String,
 
-  inspector: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+  inspector: { type: String, ref: "User" },
   submittedAt: { type: Date, default: Date.now },
 
   timestampISO: { type: String, required: true },
@@ -47,7 +47,7 @@ const blueCarbonSchema = new mongoose.Schema({
   // Type of blue carbon ecosystem
   ecosystemType: {
     type: String,
-    enum: ["mangrove", "seagrass", "salt_marsh", "tidal_flat", "coastal_peatland"],
+    enum: ["mangrove", "seagrass", "salt_marsh", "tidal_flat", "coastal_peatland","coral_reef"],
     required: true,
   },
 
@@ -71,6 +71,11 @@ const blueCarbonSchema = new mongoose.Schema({
   co2Estimate: Number,    // calculated carbon sequestration
 
   evidenceHash: String,   // hash of raw evidence files
+  status: {
+    type: String,
+    enum: ["PENDING", "APPROVED", "REJECTED"],
+    default: "PENDING",
+  },
 });
 
 module.exports = mongoose.model("BlueCarbonEvidence", blueCarbonSchema);

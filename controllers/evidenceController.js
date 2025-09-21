@@ -75,10 +75,21 @@ exports.submitEvidence = async (req, res) => {
   try {
     const payload = transformPayload(req.body);
 
-    // Check if project exists
-    const project = await Project.findById(payload.projectId);
-    if (!project) {
-      return res.status(404).json({ message: "Project not found" });
+    // // Check if project exists
+    // const project = await Project.findById(payload.projectId);
+    // if (!project) {
+    //   return res.status(404).json({ message: "Project not found" });
+    // }
+
+    const existingEvidence = await Evidence.findOne({
+      "gps.latitude": payload.gps.latitude,
+      "gps.longitude": payload.gps.longitude,
+    });
+    
+    if (existingEvidence) {
+      return res.status(400).json({
+        message: "Project already listed",
+      });
     }
 
     // Generate hash for immutability
@@ -91,9 +102,25 @@ exports.submitEvidence = async (req, res) => {
       inspector: req.user._id,
     });
 
+    const projectStamp = await Project.findOneAndUpdate(
+      { projectId: payload.projectId },
+      {
+        $set: {
+          ownerId: req.user.id,
+          status: "Under Review",
+        },
+        $setOnInsert: {
+          ownerId: req.user._id, // fallback if stamp not created yet
+          projectId: payload.projectId,
+        },
+      },
+      { new: true, upsert: true } // create if not exists
+    );
+
     res.status(201).json({
-      message: "Evidence submitted successfully",
-      data: evidence,
+      message: "Evidence submitted successfully, ProjectStamp updated",
+      evidence,
+      projectStamp,
     });
   } catch (error) {
     console.error("Error submitting evidence:", error);

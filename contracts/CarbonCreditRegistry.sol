@@ -17,29 +17,33 @@ contract CarbonCreditRegistry is ERC721, Ownable, Pausable, ReentrancyGuard {
 
     uint256 private _tokenIdCounter;
 
-    // Struct to store carbon credit project data
+    // Project status enum
+    enum ProjectStatus { PENDING, VERIFIED, RETIRED }
+
+    // Struct to store carbon credit project data (optimized for gas efficiency)
     struct CarbonProject {
-        string projectId;           // Unique project identifier
-        string projectName;         // Name of the project
-        string ecosystemType;       // Type of ecosystem (Mangrove, Forest, etc.)
-        string stateUT;             // State or Union Territory
-        string district;            // District name
-        string villagePanchayat;    // Village or Coastal Panchayat
-        string coordinates;         // Latitude and Longitude
-        uint256 areaHectares;       // Area in hectares
-        string speciesPlanted;      // Species planted
-        uint256 plantationDate;     // Timestamp of plantation
-        string verificationAgency;  // Agency that verified the project
-        uint256 verifiedDate;       // Timestamp of verification
-        uint256 carbonSequestration; // Carbon sequestered in tCO2
-        uint256 carbonCredits;      // Number of carbon credits issued
-        string status;              // Project status
-        string supportingNGO;       // Supporting NGO or Community
-        string ipfsHash;            // IPFS hash for additional metadata
-        address projectOwner;       // Address that owns this project
-        bool isRetired;             // Whether credits have been retired
-        uint256 retirementDate;     // When credits were retired
-        string retirementReason;    // Reason for retirement
+        // Minimal project identifiers
+        string projectId;          // Unique project identifier
+        string projectName;        // Name of the project
+        string ecosystemType;      // Ecosystem type (mangroves, seagrass, etc.)
+
+        // On-chain location reference (optional: precise coords off-chain in IPFS)
+        string stateUT;
+        string district;
+        string villagePanchayat;
+
+        // Carbon metrics
+        uint16 carbonCredits;      // Number of carbon credits issued
+        bool isRetired;            // Whether credits have been retired
+        uint64 retirementDate;     // Timestamp of retirement
+        string retirementReason;   // Reason for retirement
+
+        // Status & validation
+        ProjectStatus status;      // Project status (enum saves gas)
+        address projectOwner;      // Wallet address of project owner
+
+        // IPFS pointer to full project metadata
+        bytes32 ipfsHash;          // IPFS hash of JSON containing all other data
     }
 
     // Mapping from token ID to project data
@@ -87,19 +91,19 @@ contract CarbonCreditRegistry is ERC721, Ownable, Pausable, ReentrancyGuard {
     constructor() ERC721("Carbon Credit Registry", "CCR") Ownable(msg.sender) {}
 
     /**
-     * @dev Register a new carbon credit project
+     * @dev Register a new carbon credit project (only callable by verifiers)
      * @param projectData The complete project data structure
      * @param ipfsHash IPFS hash containing additional metadata
      * @return tokenId The token ID assigned to this project
      */
     function registerProject(
         CarbonProject memory projectData,
-        string memory ipfsHash
+        bytes32 ipfsHash
     ) external whenNotPaused nonReentrant returns (uint256) {
         require(bytes(projectData.projectId).length > 0, "Project ID cannot be empty");
         require(projectToToken[projectData.projectId] == 0, "Project already registered");
         require(projectData.carbonCredits > 0, "Carbon credits must be greater than 0");
-        require(projectData.areaHectares > 0, "Area must be greater than 0");
+        require(projectData.status == ProjectStatus.VERIFIED, "Project must be verified to register");
 
         uint256 tokenId = _tokenIdCounter;
         _tokenIdCounter++;
@@ -128,7 +132,7 @@ contract CarbonCreditRegistry is ERC721, Ownable, Pausable, ReentrancyGuard {
      */
     function retireCredits(
         uint256 tokenId,
-        uint256 amount,
+        uint16 amount,
         string memory reason
     ) external onlyProjectOwner(tokenId) projectExists(tokenId) whenNotPaused nonReentrant {
         CarbonProject storage project = projects[tokenId];
@@ -140,9 +144,9 @@ contract CarbonCreditRegistry is ERC721, Ownable, Pausable, ReentrancyGuard {
 
         project.carbonCredits -= amount;
         project.isRetired = true;
-        project.retirementDate = block.timestamp;
+        project.retirementDate = uint64(block.timestamp);
         project.retirementReason = reason;
-        project.status = "Retired";
+        project.status = ProjectStatus.RETIRED;
 
         retiredCredits[tokenId] = true;
 
@@ -156,13 +160,23 @@ contract CarbonCreditRegistry is ERC721, Ownable, Pausable, ReentrancyGuard {
      */
     function updateProjectStatus(
         uint256 tokenId,
-        string memory newStatus
+        ProjectStatus newStatus
     ) external onlyProjectOwner(tokenId) projectExists(tokenId) whenNotPaused {
-        require(bytes(newStatus).length > 0, "Status cannot be empty");
-        
         projects[tokenId].status = newStatus;
         
-        emit ProjectUpdated(tokenId, projects[tokenId].projectId, "status", newStatus);
+        emit ProjectUpdated(tokenId, projects[tokenId].projectId, "status", _statusToString(newStatus));
+    }
+
+    /**
+     * @dev Convert ProjectStatus enum to string
+     * @param status The status enum
+     * @return The status as string
+     */
+    function _statusToString(ProjectStatus status) internal pure returns (string memory) {
+        if (status == ProjectStatus.PENDING) return "PENDING";
+        if (status == ProjectStatus.VERIFIED) return "VERIFIED";
+        if (status == ProjectStatus.RETIRED) return "RETIRED";
+        return "UNKNOWN";
     }
 
     /**
@@ -243,7 +257,21 @@ contract CarbonCreditRegistry is ERC721, Ownable, Pausable, ReentrancyGuard {
      */
     function tokenURI(uint256 tokenId) public view override projectExists(tokenId) returns (string memory) {
         string memory baseURI = "https://ipfs.io/ipfs/";
-        return string(abi.encodePacked(baseURI, projects[tokenId].ipfsHash));
+        bytes32 ipfsHash = projects[tokenId].ipfsHash;
+        return string(abi.encodePacked(baseURI, _bytes32ToString(ipfsHash)));
+    }
+
+    /**
+     * @dev Convert bytes32 to string
+     * @param data The bytes32 data
+     * @return The string representation
+     */
+    function _bytes32ToString(bytes32 data) internal pure returns (string memory) {
+        bytes memory bytesData = new bytes(32);
+        for (uint i = 0; i < 32; i++) {
+            bytesData[i] = data[i];
+        }
+        return string(bytesData);
     }
 
     /**

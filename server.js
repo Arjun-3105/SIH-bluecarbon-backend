@@ -19,6 +19,7 @@ app.use("/api/auth", require("./routes/userRoutes"));
 app.use("/api/evidence", require("./routes/evidenceRoutes"));
 app.use("/api/projects", require("./routes/projectRoutes"));
 app.use("/api/blockchain", require("./routes/blockchainRoutes"));
+app.use("/api/verification", require("./routes/verificationRoutes"));
 
 // MongoDB connect
 mongoose.connect(process.env.MONGODB_URI)

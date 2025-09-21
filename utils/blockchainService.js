@@ -42,11 +42,11 @@ class BlockchainService {
    */
   getContractABI() {
     return [
-      "function registerProject(tuple(string projectId, string projectName, string ecosystemType, string stateUT, string district, string villagePanchayat, string coordinates, uint256 areaHectares, string speciesPlanted, uint256 plantationDate, string verificationAgency, uint256 verifiedDate, uint256 carbonSequestration, uint256 carbonCredits, string status, string supportingNGO, string ipfsHash, address projectOwner, bool isRetired, uint256 retirementDate, string retirementReason) projectData, string ipfsHash) external returns (uint256)",
-      "function retireCredits(uint256 tokenId, uint256 amount, string memory reason) external",
-      "function updateProjectStatus(uint256 tokenId, string memory newStatus) external",
-      "function getProject(uint256 tokenId) external view returns (tuple(string projectId, string projectName, string ecosystemType, string stateUT, string district, string villagePanchayat, string coordinates, uint256 areaHectares, string speciesPlanted, uint256 plantationDate, string verificationAgency, uint256 verifiedDate, uint256 carbonSequestration, uint256 carbonCredits, string status, string supportingNGO, string ipfsHash, address projectOwner, bool isRetired, uint256 retirementDate, string retirementReason))",
-      "function getProjectById(string memory projectId) external view returns (tuple(string projectId, string projectName, string ecosystemType, string stateUT, string district, string villagePanchayat, string coordinates, uint256 areaHectares, string speciesPlanted, uint256 plantationDate, string verificationAgency, uint256 verifiedDate, uint256 carbonSequestration, uint256 carbonCredits, string status, string supportingNGO, string ipfsHash, address projectOwner, bool isRetired, uint256 retirementDate, string retirementReason))",
+      "function registerProject(tuple(string projectId, string projectName, string ecosystemType, string stateUT, string district, string villagePanchayat, uint16 carbonCredits, bool isRetired, uint64 retirementDate, string retirementReason, uint8 status, address projectOwner, bytes32 ipfsHash) projectData, bytes32 ipfsHash) external returns (uint256)",
+      "function retireCredits(uint256 tokenId, uint16 amount, string memory reason) external",
+      "function updateProjectStatus(uint256 tokenId, uint8 newStatus) external",
+      "function getProject(uint256 tokenId) external view returns (tuple(string projectId, string projectName, string ecosystemType, string stateUT, string district, string villagePanchayat, uint16 carbonCredits, bool isRetired, uint64 retirementDate, string retirementReason, uint8 status, address projectOwner, bytes32 ipfsHash))",
+      "function getProjectById(string memory projectId) external view returns (tuple(string projectId, string projectName, string ecosystemType, string stateUT, string district, string villagePanchayat, uint16 carbonCredits, bool isRetired, uint64 retirementDate, string retirementReason, uint8 status, address projectOwner, bytes32 ipfsHash))",
       "function getTotalProjects() external view returns (uint256)",
       "function getTotalCarbonCredits() external view returns (uint256)",
       "function getTotalRetiredCredits() external view returns (uint256)",
@@ -63,7 +63,7 @@ class BlockchainService {
 
   /**
    * Register a carbon credit project on blockchain
-   * @param {Object} projectData - Project data from MongoDB
+   * @param {Object} projectData - Project data from frontend form
    * @returns {Promise<Object>} Transaction result
    */
   async registerProject(projectData) {
@@ -73,48 +73,39 @@ class BlockchainService {
       }
 
       // Create metadata and upload to IPFS
-      const metadata = ipfsService.createProjectMetadata(projectData);
+      const metadata = this.createProjectMetadata(projectData);
       const ipfsHash = await ipfsService.uploadToIPFS(metadata);
 
-      // Convert dates to timestamps
-      const plantationTimestamp = Math.floor(new Date(projectData.Plantation_Date).getTime() / 1000);
-      const verifiedTimestamp = Math.floor(new Date(projectData.Verified_Date).getTime() / 1000);
+      // Convert IPFS hash to bytes32
+      const ipfsHashBytes32 = ethers.keccak256(ethers.toUtf8Bytes(ipfsHash));
 
-      // Prepare project data for smart contract
+      // Prepare project data for smart contract (optimized structure)
       const contractProjectData = {
-        projectId: projectData.Project_ID,
-        projectName: projectData.Project_Name,
-        ecosystemType: projectData.Ecosystem_Type,
-        stateUT: projectData.State_UT,
-        district: projectData.District,
-        villagePanchayat: projectData.Village_Coastal_Panchayat,
-        coordinates: projectData.Latitude_Longitude,
-        areaHectares: projectData.Area_Hectares,
-        speciesPlanted: projectData.Species_Planted,
-        plantationDate: plantationTimestamp,
-        verificationAgency: projectData.Verification_Agency,
-        verifiedDate: verifiedTimestamp,
-        carbonSequestration: projectData.Carbon_Sequestration_tCO2,
-        carbonCredits: projectData.Carbon_Credits_Issued,
-        status: projectData.Status,
-        supportingNGO: projectData.Supporting_NGO_Community,
-        ipfsHash: ipfsHash,
-        projectOwner: ethers.ZeroAddress, // Will be set by contract
+        projectId: projectData.projectId,
+        projectName: projectData.projectName,
+        ecosystemType: projectData.ecosystemType,
+        stateUT: projectData.location.stateUT || '',
+        district: projectData.location.district || '',
+        villagePanchayat: projectData.location.villagePanchayat || '',
+        carbonCredits: Math.floor(projectData.estimatedCO2Sequestration || 0),
         isRetired: false,
         retirementDate: 0,
-        retirementReason: ""
+        retirementReason: "",
+        status: 1, // VERIFIED status
+        projectOwner: ethers.ZeroAddress, // Will be set by contract
+        ipfsHash: ipfsHashBytes32
       };
 
       // Estimate gas
       const gasEstimate = await this.contract.registerProject.estimateGas(
         contractProjectData,
-        ipfsHash
+        ipfsHashBytes32
       );
 
       // Register project
       const tx = await this.contract.registerProject(
         contractProjectData,
-        ipfsHash,
+        ipfsHashBytes32,
         {
           gasLimit: gasEstimate * 2n, // Add buffer
           gasPrice: await this.provider.getGasPrice()
@@ -159,6 +150,44 @@ class BlockchainService {
   }
 
   /**
+   * Create project metadata for IPFS
+   * @param {Object} projectData - Project data from frontend
+   * @returns {Object} Metadata object
+   */
+  createProjectMetadata(projectData) {
+    return {
+      name: projectData.projectName,
+      description: projectData.description,
+      ecosystemType: projectData.ecosystemType,
+      organizationName: projectData.organizationName,
+      ownerName: projectData.ownerName,
+      email: projectData.email,
+      phone: projectData.phone,
+      area: projectData.area,
+      density: projectData.density,
+      location: projectData.location,
+      startDate: projectData.startDate,
+      duration: projectData.duration,
+      legalOwnership: projectData.legalOwnership,
+      permits: projectData.permits,
+      baselineData: projectData.baselineData,
+      monitoringPlan: projectData.monitoringPlan,
+      validator: projectData.validator,
+      communityConsent: projectData.communityConsent,
+      documents: projectData.documents,
+      plantationSpecies: projectData.plantationSpecies,
+      treeCount: projectData.treeCount,
+      averageHeight: projectData.averageHeight,
+      averageLength: projectData.averageLength,
+      averageBreadth: projectData.averageBreadth,
+      seedlings: projectData.seedlings,
+      estimatedCO2Sequestration: projectData.estimatedCO2Sequestration,
+      timestamp: new Date().toISOString(),
+      version: "1.0"
+    };
+  }
+
+  /**
    * Retire carbon credits
    * @param {string} tokenId - Token ID
    * @param {number} amount - Amount to retire
@@ -173,7 +202,7 @@ class BlockchainService {
 
       const tx = await this.contract.retireCredits(
         tokenId,
-        amount,
+        Math.floor(amount), // Ensure it's an integer
         reason,
         {
           gasLimit: 200000,
@@ -198,7 +227,7 @@ class BlockchainService {
   /**
    * Update project status
    * @param {string} tokenId - Token ID
-   * @param {string} newStatus - New status
+   * @param {number} newStatus - New status (0=PENDING, 1=VERIFIED, 2=RETIRED)
    * @returns {Promise<Object>} Transaction result
    */
   async updateProjectStatus(tokenId, newStatus) {
@@ -251,26 +280,42 @@ class BlockchainService {
         stateUT: project.stateUT,
         district: project.district,
         villagePanchayat: project.villagePanchayat,
-        coordinates: project.coordinates,
-        areaHectares: project.areaHectares.toString(),
-        speciesPlanted: project.speciesPlanted,
-        plantationDate: new Date(Number(project.plantationDate) * 1000).toISOString(),
-        verificationAgency: project.verificationAgency,
-        verifiedDate: new Date(Number(project.verifiedDate) * 1000).toISOString(),
-        carbonSequestration: project.carbonSequestration.toString(),
         carbonCredits: project.carbonCredits.toString(),
-        status: project.status,
-        supportingNGO: project.supportingNGO,
-        ipfsHash: project.ipfsHash,
-        projectOwner: project.projectOwner,
         isRetired: project.isRetired,
         retirementDate: project.retirementDate.toString(),
-        retirementReason: project.retirementReason
+        retirementReason: project.retirementReason,
+        status: this.getStatusString(project.status),
+        projectOwner: project.projectOwner,
+        ipfsHash: this.bytes32ToString(project.ipfsHash)
       };
     } catch (error) {
       console.error('Failed to get project:', error);
       throw error;
     }
+  }
+
+  /**
+   * Convert status enum to string
+   * @param {number} status - Status enum value
+   * @returns {string} Status string
+   */
+  getStatusString(status) {
+    switch (status) {
+      case 0: return 'PENDING';
+      case 1: return 'VERIFIED';
+      case 2: return 'RETIRED';
+      default: return 'UNKNOWN';
+    }
+  }
+
+  /**
+   * Convert bytes32 to string
+   * @param {string} bytes32Data - Bytes32 data
+   * @returns {string} String representation
+   */
+  bytes32ToString(bytes32Data) {
+    // Remove the 0x prefix and convert to string
+    return ethers.toUtf8String(bytes32Data);
   }
 
   /**
@@ -293,21 +338,13 @@ class BlockchainService {
         stateUT: project.stateUT,
         district: project.district,
         villagePanchayat: project.villagePanchayat,
-        coordinates: project.coordinates,
-        areaHectares: project.areaHectares.toString(),
-        speciesPlanted: project.speciesPlanted,
-        plantationDate: new Date(Number(project.plantationDate) * 1000).toISOString(),
-        verificationAgency: project.verificationAgency,
-        verifiedDate: new Date(Number(project.verifiedDate) * 1000).toISOString(),
-        carbonSequestration: project.carbonSequestration.toString(),
         carbonCredits: project.carbonCredits.toString(),
-        status: project.status,
-        supportingNGO: project.supportingNGO,
-        ipfsHash: project.ipfsHash,
-        projectOwner: project.projectOwner,
         isRetired: project.isRetired,
         retirementDate: project.retirementDate.toString(),
-        retirementReason: project.retirementReason
+        retirementReason: project.retirementReason,
+        status: this.getStatusString(project.status),
+        projectOwner: project.projectOwner,
+        ipfsHash: this.bytes32ToString(project.ipfsHash)
       };
     } catch (error) {
       console.error('Failed to get project by ID:', error);

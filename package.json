@@ -24,7 +24,8 @@
     "express": "^5.1.0",
     "ipfs-http-client": "^60.0.1",
     "jsonwebtoken": "^9.0.2",
-    "mongoose": "^8.18.1"
+    "mongoose": "^8.18.1",
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^4.0.0",
