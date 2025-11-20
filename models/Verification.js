@@ -64,6 +64,16 @@ const verificationSchema = new mongoose.Schema({
 
   // Evidence hash for raw evidence files
   evidenceHash: String,   // hash of raw evidence files
+
+  // Blockchain information (if registered)
+  blockchain: {
+    tokenId: String,
+    transactionHash: String,
+    blockNumber: Number,
+    ipfsHash: String,
+    isRegistered: { type: Boolean, default: false },
+    registrationError: String
+  }
 });
 
 module.exports = mongoose.model("Verification", verificationSchema);

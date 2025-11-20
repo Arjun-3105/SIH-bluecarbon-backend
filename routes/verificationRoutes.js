@@ -49,4 +49,16 @@ router.get("/verified",
   verificationController.getVerifiedProjects
 );
 
+// Get all pending evidence for verification (Verifiers only)
+router.get("/pending-evidence", 
+  roleMiddleware(["Verifier", "Admin"]), 
+  verificationController.getPendingEvidence
+);
+
+// Submit verification for evidence (Verifiers only)
+router.post("/submit", 
+  roleMiddleware(["Verifier", "Admin"]), 
+  verificationController.submitVerification
+);
+
 module.exports = router;

@@ -449,3 +449,182 @@ exports.getVerifiedProjects = async (req, res) => {
     });
   }
 };
+
+// Get all pending evidence for verification
+exports.getPendingEvidence = async (req, res) => {
+  try {
+    const Evidence = require("../models/Evidence");
+    
+    const pendingEvidence = await Evidence.find({ status: "PENDING" })
+      .populate('inspector', 'name email')
+      .sort({ submittedAt: -1 });
+
+    res.json({
+      success: true,
+      evidence: pendingEvidence,
+      count: pendingEvidence.length
+    });
+  } catch (error) {
+    console.error("Error fetching pending evidence:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error while fetching pending evidence"
+    });
+  }
+};
+
+// Submit verification for evidence (new endpoint for verifiers)
+exports.submitVerification = async (req, res) => {
+  try {
+    const { 
+      evidenceId,
+      projectId,
+      status, // "APPROVED" or "REJECTED"
+      comments,
+      gps,
+      ecosystemType,
+      soilCores,
+      co2Estimate,
+      photos,
+      videos,
+      evidenceHash
+    } = req.body;
+
+    const verifierId = req.user.id;
+
+    // Validate required fields
+    if (!evidenceId || !status || !evidenceHash) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields: evidenceId, status, and evidenceHash are required"
+      });
+    }
+
+    // Find the evidence
+    const Evidence = require("../models/Evidence");
+    const evidence = await Evidence.findById(evidenceId);
+    if (!evidence) {
+      return res.status(404).json({
+        success: false,
+        message: "Evidence not found"
+      });
+    }
+
+    // Check if evidence is already verified
+    if (evidence.status !== "PENDING") {
+      return res.status(400).json({
+        success: false,
+        message: "Evidence has already been verified"
+      });
+    }
+
+    // Create verification record
+    const verification = new Verification({
+      projectId: evidence.projectId,
+      evidenceId: evidenceId,
+      status: status === "APPROVED" ? "Approved" : "Rejected",
+      comments,
+      verifier: verifierId,
+      gps: gps || evidence.gps,
+      ecosystemType: ecosystemType || evidence.ecosystemType,
+      soilCores: soilCores || evidence.soilCores,
+      co2Estimate: co2Estimate || evidence.co2Estimate,
+      photos: photos || evidence.photos,
+      videos: videos || evidence.videos,
+      evidenceHash,
+      verifiedAt: new Date()
+    });
+
+    await verification.save();
+
+    // Update evidence status
+    evidence.status = status;
+    evidence.verifiedAt = new Date();
+    evidence.verifier = verifierId;
+    await evidence.save();
+
+    // If approved, register minimal data on blockchain
+    if (status === "APPROVED") {
+      try {
+        // Prepare minimal data for blockchain storage
+        const minimalProjectData = {
+          projectId: evidence.projectId || `EVIDENCE_${evidenceId}`,
+          projectName: `Verified ${ecosystemType || evidence.ecosystemType} Project`,
+          ecosystemType: ecosystemType || evidence.ecosystemType,
+          location: {
+            stateUT: "Unknown", // Could be extracted from GPS if needed
+            district: "Unknown",
+            villagePanchayat: "Unknown"
+          },
+          estimatedCO2Sequestration: co2Estimate || evidence.co2Estimate || 0
+        };
+
+        // Register on blockchain with minimal data
+        const blockchainResult = await blockchainService.registerProject(minimalProjectData);
+
+        // Update verification with blockchain info
+        verification.blockchain = {
+          tokenId: blockchainResult.tokenId,
+          transactionHash: blockchainResult.transactionHash,
+          blockNumber: blockchainResult.blockNumber,
+          ipfsHash: blockchainResult.ipfsHash,
+          isRegistered: true
+        };
+        await verification.save();
+
+        res.json({
+          success: true,
+          message: "Evidence verified and registered on blockchain successfully",
+          verification,
+          blockchainResult,
+          evidence: {
+            id: evidence._id,
+            status: evidence.status,
+            verifiedAt: evidence.verifiedAt
+          }
+        });
+
+      } catch (blockchainError) {
+        console.error("Blockchain registration failed:", blockchainError);
+        
+        // Still save verification but mark blockchain registration as failed
+        verification.blockchain = {
+          isRegistered: false,
+          registrationError: blockchainError.message
+        };
+        await verification.save();
+
+        res.status(500).json({
+          success: false,
+          message: "Evidence verified but blockchain registration failed. Please retry blockchain registration.",
+          verification,
+          blockchainError: blockchainError.message,
+          evidence: {
+            id: evidence._id,
+            status: evidence.status,
+            verifiedAt: evidence.verifiedAt
+          }
+        });
+      }
+    } else {
+      // For rejected evidence, just save verification
+      res.json({
+        success: true,
+        message: "Evidence verification completed (rejected)",
+        verification,
+        evidence: {
+          id: evidence._id,
+          status: evidence.status,
+          verifiedAt: evidence.verifiedAt
+        }
+      });
+    }
+
+  } catch (error) {
+    console.error("Error submitting verification:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error while submitting verification"
+    });
+  }
+};

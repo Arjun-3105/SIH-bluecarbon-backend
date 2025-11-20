@@ -5,6 +5,6 @@ const authMiddleware = require("../middlewares/authMiddleware");
 const roleMiddleware = require("../middlewares/roleMiddleware");
 
 // Inspector-only route
-router.post("/", authMiddleware, roleMiddleware(["Inspector"]), submitEvidence);
+router.post("/", authMiddleware, roleMiddleware(["Owner", "Inspector"]), submitEvidence);
 
 module.exports = router;

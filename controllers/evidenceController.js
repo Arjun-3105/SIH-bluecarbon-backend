@@ -56,8 +56,11 @@ function transformPayload(payload) {
     plotId: payload.plotId,
     timestampISO: payload.timestampISO || new Date().toISOString(),
     gps,
-    photos: (payload.documents || []).map(doc => doc.name),
-    videos: (payload.videos || []).map(video => video.name),
+    photos: ((payload.documents || []).map(doc => {
+      if (!doc.ipfsHash) console.warn("Missing IPFS hash for document:", doc.name);
+      return doc.ipfsHash;
+    }).filter(Boolean)),
+    videos: (payload.videos || []).map(video => video.ipfsHash),
     ecosystemType,
     mangroveData,
     seagrassData,
@@ -81,10 +84,11 @@ exports.submitEvidence = async (req, res) => {
     //   return res.status(404).json({ message: "Project not found" });
     // }
 
-    const existingEvidence = await Evidence.findOne({
-      "gps.latitude": payload.gps.latitude,
-      "gps.longitude": payload.gps.longitude,
-    });
+    // const existingEvidence = await Evidence.findOne({
+    //   "gps.latitude": payload.gps.latitude,
+    //   "gps.longitude": payload.gps.longitude,
+    // });
+    const existingEvidence = false;
     
     if (existingEvidence) {
       return res.status(400).json({
@@ -107,7 +111,7 @@ exports.submitEvidence = async (req, res) => {
       {
         $set: {
           ownerId: req.user.id,
-          status: "Under Review",
+          status: "Pending",
         },
         $setOnInsert: {
           ownerId: req.user._id, // fallback if stamp not created yet

@@ -76,6 +76,10 @@ const blueCarbonSchema = new mongoose.Schema({
     enum: ["PENDING", "APPROVED", "REJECTED"],
     default: "PENDING",
   },
+  
+  // Verification fields
+  verifier: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+  verifiedAt: { type: Date }
 });
 
 module.exports = mongoose.model("BlueCarbonEvidence", blueCarbonSchema);

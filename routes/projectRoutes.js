@@ -8,7 +8,7 @@ const projectController = require("../controllers/projectController");
 router.post(
   "/register",
   authMiddleware,
-  roleMiddleware(["Register"]),
+  roleMiddleware(["Owner", "Inspector"]),
   projectController.registerProject
 );
 
@@ -16,7 +16,7 @@ router.post(
 router.get(
   "/my-projects",
   authMiddleware,
-  roleMiddleware(["Register", "Inspector"]),
+  roleMiddleware(["Register", "Owner", "Inspector"]),
   projectController.getUserProjects
 );
 
@@ -24,16 +24,16 @@ router.get(
 router.get(
   "/assigned",
   authMiddleware,
-  roleMiddleware(["Inspector"]),
+  roleMiddleware(["Owner", "Inspector"]),
   projectController.getAssignedProjects
 );
 
 // Get all projects (Admin/Verifier only)
 router.get(
-  "/all",
+  "/allID",
   authMiddleware,
   roleMiddleware(["Verifier"]),
-  projectController.getAllProjects
+  projectController.getAllProjectsID
 );
 
 // Get a single project by ID

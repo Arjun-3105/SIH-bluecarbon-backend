@@ -1,0 +1,5 @@
+(await BlueCarbon.balanceOf("0xD60BE0d8fAcC911CfBFf11CC112987227Ed0aac2")).toString()
+const BlueCarbon = await ethers.getContractAt("BlueCarbon", "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9");
+cls
+(await BlueCarbon.balanceOf("0xD60BE0d8fAcC
+const BlueCarbon = await ethers.getContractAt("BlueCarbon", "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9");

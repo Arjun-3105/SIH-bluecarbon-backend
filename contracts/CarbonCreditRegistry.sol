@@ -6,76 +6,39 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
+import "./BlueCarbonToken.sol"; // ERC20 token with AccessControl
 
 /**
  * @title CarbonCreditRegistry
- * @dev A comprehensive carbon credit registry using ERC-721 tokens
- * @notice This contract manages carbon credits as NFTs with immutable project data
+ * @dev NFT registry for carbon projects with ERC20 integration
  */
 contract CarbonCreditRegistry is ERC721, Ownable, Pausable, ReentrancyGuard {
     using Strings for uint256;
 
     uint256 private _tokenIdCounter;
 
-    // Project status enum
+    BlueCarbon public blueCarbon; // ERC20 token reference
+
     enum ProjectStatus { PENDING, VERIFIED, RETIRED }
 
-    // Struct to store carbon credit project data (optimized for gas efficiency)
-    struct CarbonProject {
-        // Minimal project identifiers
-        string projectId;          // Unique project identifier
-        string projectName;        // Name of the project
-        string ecosystemType;      // Ecosystem type (mangroves, seagrass, etc.)
-
-        // On-chain location reference (optional: precise coords off-chain in IPFS)
-        string stateUT;
-        string district;
-        string villagePanchayat;
-
-        // Carbon metrics
-        uint16 carbonCredits;      // Number of carbon credits issued
-        bool isRetired;            // Whether credits have been retired
-        uint64 retirementDate;     // Timestamp of retirement
-        string retirementReason;   // Reason for retirement
-
-        // Status & validation
-        ProjectStatus status;      // Project status (enum saves gas)
-        address projectOwner;      // Wallet address of project owner
-
-        // IPFS pointer to full project metadata
-        bytes32 ipfsHash;          // IPFS hash of JSON containing all other data
+    struct CarbonProjectOnChain {
+        string projectId;        // Unique project ID
+        uint16 carbonCredits;    // NFT credits
+        ProjectStatus status;
+        bool isRetired;
+        uint64 retirementDate;
+        address projectOwner;
+        bytes32 ipfsHash;        // IPFS hash for off-chain metadata
     }
 
-    // Mapping from token ID to project data
-    mapping(uint256 => CarbonProject) public projects;
-    
-    // Mapping from project ID to token ID (for quick lookup)
+    mapping(uint256 => CarbonProjectOnChain) public projects;
     mapping(string => uint256) public projectToToken;
-    
-    // Mapping to track retired credits
     mapping(uint256 => bool) public retiredCredits;
-    
+
     // Events
-    event ProjectRegistered(
-        uint256 indexed tokenId,
-        string indexed projectId,
-        address indexed owner,
-        uint256 carbonCredits
-    );
-    
-    event CreditsRetired(
-        uint256 indexed tokenId,
-        string indexed projectId,
-        uint256 amount,
-        string reason
-    );
-    
-    event ProjectUpdated(
-        uint256 indexed tokenId,
-        string indexed projectId,
-        string field,
-        string newValue
-    );
+    event ProjectRegistered(uint256 indexed tokenId, string indexed projectId, address indexed owner, uint256 carbonCredits);
+    event CreditsRetired(uint256 indexed tokenId, string indexed projectId, uint256 amount, string reason);
+    event ERC20CreditsMinted(uint256 indexed tokenId, uint256 amount, address to);
 
     // Modifiers
     modifier onlyProjectOwner(uint256 tokenId) {
@@ -88,64 +51,94 @@ contract CarbonCreditRegistry is ERC721, Ownable, Pausable, ReentrancyGuard {
         _;
     }
 
-    constructor() ERC721("Carbon Credit Registry", "CCR") Ownable(msg.sender) {}
+    constructor(address _blueCarbonToken)
+        ERC721("Carbon Credit Registry", "CCR")
+        Ownable(msg.sender)
+        Pausable()
+    {
+        blueCarbon = BlueCarbon(_blueCarbonToken);
+    }
 
-    /**
-     * @dev Register a new carbon credit project (only callable by verifiers)
-     * @param projectData The complete project data structure
-     * @param ipfsHash IPFS hash containing additional metadata
-     * @return tokenId The token ID assigned to this project
+    /** 
+     * @dev Register a new NFT project
      */
     function registerProject(
-        CarbonProject memory projectData,
-        bytes32 ipfsHash
-    ) external whenNotPaused nonReentrant returns (uint256) {
-        require(bytes(projectData.projectId).length > 0, "Project ID cannot be empty");
-        require(projectToToken[projectData.projectId] == 0, "Project already registered");
-        require(projectData.carbonCredits > 0, "Carbon credits must be greater than 0");
-        require(projectData.status == ProjectStatus.VERIFIED, "Project must be verified to register");
+    string memory projectId,
+    uint16 carbonCredits,
+    address projectOwner,       // Add this parameter
+    bytes32 ipfsHash
+) external whenNotPaused nonReentrant returns (uint256) {
+    require(bytes(projectId).length > 0, "Project ID required");
+    require(projectToToken[projectId] == 0, "Project exists");
+    require(carbonCredits > 0, "Credits > 0");
+    require(projectOwner != address(0), "Invalid owner");
 
-        uint256 tokenId = _tokenIdCounter;
-        _tokenIdCounter++;
+    uint256 tokenId = _tokenIdCounter;
+    _tokenIdCounter++;
 
-        projectData.projectOwner = msg.sender;
-        projectData.ipfsHash = ipfsHash;
-        projectData.isRetired = false;
-        projectData.retirementDate = 0;
-        projectData.retirementReason = "";
+    projects[tokenId] = CarbonProjectOnChain({
+        projectId: projectId,
+        carbonCredits: carbonCredits,
+        status: ProjectStatus.VERIFIED, // automatically verified
+        isRetired: false,
+        retirementDate: 0,
+        projectOwner: projectOwner,
+        ipfsHash: ipfsHash
+    });
 
-        projects[tokenId] = projectData;
-        projectToToken[projectData.projectId] = tokenId;
+    projectToToken[projectId] = tokenId;
 
-        _safeMint(msg.sender, tokenId);
+    _safeMint(projectOwner, tokenId); // NFT goes to project owner
+    emit ProjectRegistered(tokenId, projectId, projectOwner, carbonCredits);
 
-        emit ProjectRegistered(tokenId, projectData.projectId, msg.sender, projectData.carbonCredits);
+    // Mint ERC20 tokens immediately (scale to 18 decimals)
+    blueCarbon.mint(projectOwner, uint256(carbonCredits) * 1e18);
+    emit ERC20CreditsMinted(tokenId, carbonCredits, projectOwner);
 
-        return tokenId;
+    return tokenId;
+}
+
+
+    /**
+     * @dev Mint ERC20 tokens from NFT credits
+     * Note: Registry contract must have MINTER_ROLE on BlueCarbon
+     */
+    function mintERC20Credits(uint256 tokenId, uint256 amount, address to)
+        external
+        onlyProjectOwner(tokenId)
+        projectExists(tokenId)
+        whenNotPaused
+    {
+        require(amount > 0, "Amount must be > 0");
+        CarbonProjectOnChain storage project = projects[tokenId];
+        require(!project.isRetired, "Project retired");
+        require(amount <= project.carbonCredits, "Amount exceeds NFT credits");
+
+        // Reduce NFT credits
+        project.carbonCredits -= uint16(amount);
+
+        // Mint ERC20 tokens (scale to 18 decimals)
+        blueCarbon.mint(to, amount * 1e18);
+
+        emit ERC20CreditsMinted(tokenId, amount, to);
     }
 
     /**
-     * @dev Retire carbon credits (burn them permanently)
-     * @param tokenId The token ID to retire
-     * @param amount The amount of credits to retire
-     * @param reason The reason for retirement
+     * @dev Retire NFT credits permanently
      */
     function retireCredits(
         uint256 tokenId,
         uint16 amount,
         string memory reason
     ) external onlyProjectOwner(tokenId) projectExists(tokenId) whenNotPaused nonReentrant {
-        CarbonProject storage project = projects[tokenId];
-        
-        require(!project.isRetired, "Credits already retired");
-        require(amount > 0, "Amount must be greater than 0");
-        require(amount <= project.carbonCredits, "Amount exceeds available credits");
-        require(bytes(reason).length > 0, "Retirement reason required");
+        CarbonProjectOnChain storage project = projects[tokenId];
+        require(!project.isRetired, "Already retired");
+        require(amount > 0 && amount <= project.carbonCredits, "Invalid amount");
+        require(bytes(reason).length > 0, "Reason required");
 
         project.carbonCredits -= amount;
         project.isRetired = true;
         project.retirementDate = uint64(block.timestamp);
-        project.retirementReason = reason;
         project.status = ProjectStatus.RETIRED;
 
         retiredCredits[tokenId] = true;
@@ -153,152 +146,48 @@ contract CarbonCreditRegistry is ERC721, Ownable, Pausable, ReentrancyGuard {
         emit CreditsRetired(tokenId, project.projectId, amount, reason);
     }
 
-    /**
-     * @dev Update project status (only by project owner)
-     * @param tokenId The token ID to update
-     * @param newStatus The new status
-     */
-    function updateProjectStatus(
-        uint256 tokenId,
-        ProjectStatus newStatus
-    ) external onlyProjectOwner(tokenId) projectExists(tokenId) whenNotPaused {
-        projects[tokenId].status = newStatus;
-        
-        emit ProjectUpdated(tokenId, projects[tokenId].projectId, "status", _statusToString(newStatus));
-    }
-
-    /**
-     * @dev Convert ProjectStatus enum to string
-     * @param status The status enum
-     * @return The status as string
-     */
-    function _statusToString(ProjectStatus status) internal pure returns (string memory) {
-        if (status == ProjectStatus.PENDING) return "PENDING";
-        if (status == ProjectStatus.VERIFIED) return "VERIFIED";
-        if (status == ProjectStatus.RETIRED) return "RETIRED";
-        return "UNKNOWN";
-    }
-
-    /**
-     * @dev Get project data by token ID
-     * @param tokenId The token ID
-     * @return project The complete project data
-     */
-    function getProject(uint256 tokenId) external view projectExists(tokenId) returns (CarbonProject memory) {
-        return projects[tokenId];
-    }
-
-    /**
-     * @dev Get project data by project ID
-     * @param projectId The project ID
-     * @return project The complete project data
-     */
-    function getProjectById(string memory projectId) external view returns (CarbonProject memory) {
-        uint256 tokenId = projectToToken[projectId];
-        require(tokenId != 0, "Project not found");
-        return projects[tokenId];
-    }
-
-    /**
-     * @dev Get total number of projects registered
-     * @return count The total count
-     */
-    function getTotalProjects() external view returns (uint256) {
-        return _tokenIdCounter;
-    }
-
-    /**
-     * @dev Get total carbon credits issued
-     * @return total The total carbon credits
-     */
-    function getTotalCarbonCredits() external view returns (uint256) {
-        uint256 total = 0;
-        uint256 totalProjects = _tokenIdCounter;
-        
-        for (uint256 i = 0; i < totalProjects; i++) {
-            if (!projects[i].isRetired) {
-                total += projects[i].carbonCredits;
-            }
-        }
-        
-        return total;
-    }
-
-    /**
-     * @dev Get total carbon credits retired
-     * @return total The total retired credits
-     */
-    function getTotalRetiredCredits() external view returns (uint256) {
-        uint256 total = 0;
-        uint256 totalProjects = _tokenIdCounter;
-        
-        for (uint256 i = 0; i < totalProjects; i++) {
-            if (projects[i].isRetired) {
-                total += (projects[i].carbonSequestration - projects[i].carbonCredits);
-            }
-        }
-        
-        return total;
-    }
-
-    /**
-     * @dev Check if a project exists by project ID
-     * @param projectId The project ID to check
-     * @return exists Whether the project exists
-     */
-    function projectExistsById(string memory projectId) external view returns (bool) {
-        return projectToToken[projectId] != 0;
-    }
-
-    /**
-     * @dev Override tokenURI to return IPFS metadata
-     * @param tokenId The token ID
-     * @return The token URI
-     */
+    /** ERC721 Metadata URI */
     function tokenURI(uint256 tokenId) public view override projectExists(tokenId) returns (string memory) {
         string memory baseURI = "https://ipfs.io/ipfs/";
-        bytes32 ipfsHash = projects[tokenId].ipfsHash;
-        return string(abi.encodePacked(baseURI, _bytes32ToString(ipfsHash)));
+        return string(abi.encodePacked(baseURI, _bytes32ToString(projects[tokenId].ipfsHash)));
     }
 
-    /**
-     * @dev Convert bytes32 to string
-     * @param data The bytes32 data
-     * @return The string representation
-     */
     function _bytes32ToString(bytes32 data) internal pure returns (string memory) {
         bytes memory bytesData = new bytes(32);
-        for (uint i = 0; i < 32; i++) {
-            bytesData[i] = data[i];
-        }
+        for (uint i = 0; i < 32; i++) bytesData[i] = data[i];
         return string(bytesData);
     }
 
-    /**
-     * @dev Pause the contract (only owner)
-     */
-    function pause() external onlyOwner {
-        _pause();
-    }
+    // Pause/unpause
+    function pause() external onlyOwner { _pause(); }
+    function unpause() external onlyOwner { _unpause(); }
 
-    /**
-     * @dev Unpause the contract (only owner)
-     */
-    function unpause() external onlyOwner {
-        _unpause();
-    }
-
-    /**
-     * @dev Emergency function to transfer ownership of a project (only owner)
-     * @param tokenId The token ID
-     * @param newOwner The new owner address
-     */
-    function emergencyTransferProject(
-        uint256 tokenId,
-        address newOwner
-    ) external onlyOwner projectExists(tokenId) {
-        require(newOwner != address(0), "Invalid new owner");
+    // Emergency transfer
+    function emergencyTransferProject(uint256 tokenId, address newOwner) external onlyOwner projectExists(tokenId) {
+        require(newOwner != address(0), "Invalid owner");
         _transfer(ownerOf(tokenId), newOwner, tokenId);
         projects[tokenId].projectOwner = newOwner;
     }
+
+function verifyAndMint(uint256 tokenId) external onlyOwner projectExists(tokenId) {
+    CarbonProjectOnChain storage project = projects[tokenId];
+
+    require(project.status != ProjectStatus.VERIFIED, "Already verified");
+    require(!project.isRetired, "Project retired");
+
+    // Mark project as verified
+    project.status = ProjectStatus.VERIFIED;
+
+    // Mint ERC20 tokens equal to NFT credits
+    uint256 amount = project.carbonCredits;
+    require(amount > 0, "No credits left");
+
+    // Reduce NFT credits
+    project.carbonCredits = 0;
+
+    // Mint ERC20 tokens to project owner (scale to 18 decimals)
+    blueCarbon.mint(project.projectOwner, amount * 1e18);
+
+    emit ERC20CreditsMinted(tokenId, amount, project.projectOwner);
+}
 }

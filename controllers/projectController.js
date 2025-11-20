@@ -1,4 +1,5 @@
 const Project = require("../models/Evidence");
+const ProjectStamp = require("../models/Project");
 const { v4: uuidv4 } = require('uuid');
 
 // Get all projects assigned to the logged-in register/inspector
@@ -7,7 +8,7 @@ exports.getAssignedProjects = async (req, res) => {
     const userId = req.user.id; // from authMiddleware
     let projects;
 
-     if (req.user.role === "Inspector") {
+    if (["Inspector", "Owner"].includes(req.user.role)) {
       projects = await Project.find({ assignedInspector: userId });
     } else {
       return res.status(403).json({ message: "Invalid role for this action." });
@@ -198,3 +199,64 @@ exports.getAllProjects = async (req, res) => {
     });
   }
 };
+
+exports.getAllProjectsID = async (req, res) => {
+  try {
+    const pendingStamps = await ProjectStamp.find({ status: "Pending" })
+      .select("projectId ownerId assignedInspector status createdAt updatedAt")
+      .lean();
+
+    if (pendingStamps.length === 0) {
+      return res.status(200).json({
+        success: true,
+        count: 0,
+        data: [],
+      });
+    }
+
+    const projectIds = pendingStamps
+      .map((stamp) => stamp.projectId)
+      .filter(Boolean);
+
+    const evidenceDocs = await Project.find(
+      { projectId: { $in: projectIds } },
+      "projectId timestampISO gps photos videos ecosystemType soilCores co2Estimate evidenceHash status submittedAt inspector"
+    )
+      .lean();
+
+    const evidenceMap = new Map(
+      evidenceDocs.map((doc) => [doc.projectId, doc])
+    );
+
+    const enriched = pendingStamps.map((stamp) => {
+      const evidence = evidenceMap.get(stamp.projectId) || null;
+      const ipfs = (evidence?.photos || []).map((hash) => ({
+        hash,
+        gateways: {
+          ipfs: `https://ipfs.io/ipfs/${hash}`,
+          pinata: `https://gateway.pinata.cloud/ipfs/${hash}`,
+          cloudflare: `https://cloudflare-ipfs.com/ipfs/${hash}`,
+        },
+      }));
+
+      return {
+        ...stamp,
+        evidence,
+        ipfs,
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      count: enriched.length,
+      data: enriched,
+    });
+  } catch (error) {
+    console.error("Error fetching projects:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch projects",
+    });
+  }
+};
+

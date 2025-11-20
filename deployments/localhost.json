@@ -1,0 +1,18 @@
+{
+  "network": "localhost",
+  "deployer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+  "blueCarbonToken": {
+    "address": "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853",
+    "name": "BlueCarbon",
+    "symbol": "BCARB"
+  },
+  "carbonCreditRegistry": {
+    "address": "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6",
+    "name": "Carbon Credit Registry",
+    "symbol": "CCR"
+  },
+  "roles": {
+    "registryHasMinterRole": true
+  },
+  "timestamp": "2025-11-18T09:34:18.776Z"
+}

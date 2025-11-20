@@ -14,12 +14,19 @@ app.use(cors({
   credentials: true, // allow cookies/authorization headers if needed
 }));
 
+// Serve static frontend and artifacts for ABIs
+app.use(express.static("public"));
+app.use("/artifacts", express.static("artifacts"));
+
 // Routes
 app.use("/api/auth", require("./routes/userRoutes"));
 app.use("/api/evidence", require("./routes/evidenceRoutes"));
 app.use("/api/projects", require("./routes/projectRoutes"));
 app.use("/api/blockchain", require("./routes/blockchainRoutes"));
 app.use("/api/verification", require("./routes/verificationRoutes"));
+app.use("/api/transactions", require("./routes/transactionRoutes"));
+app.use("/api/progress", require("./routes/progressRoutes"));
+app.use("/api/dapp", require("./routes/dappRoutes"));
 
 // MongoDB connect
 mongoose.connect(process.env.MONGODB_URI)

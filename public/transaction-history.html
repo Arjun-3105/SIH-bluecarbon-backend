@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transaction History - Carbon Credit Registry</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .controls {
+            padding: 30px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .search-container {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .search-input {
+            flex: 1;
+            min-width: 300px;
+            padding: 12px 20px;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .filter-select {
+            padding: 12px 20px;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            font-size: 16px;
+            background: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .filter-select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+            transition: transform 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            color: #6c757d;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .transactions-container {
+            padding: 30px;
+        }
+
+        .transaction-item {
+            background: white;
+            border: 1px solid #e9ecef;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 15px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .transaction-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            border-color: #667eea;
+        }
+
+        .transaction-header {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .transaction-hash {
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        .transaction-status {
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-failed {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status-pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .transaction-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .detail-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .detail-label {
+            font-size: 0.8rem;
+            color: #6c757d;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 5px;
+        }
+
+        .detail-value {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .transaction-type {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            margin-top: 10px;
+        }
+
+        .type-project_registration {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .type-token_transfer {
+            background: #f3e5f5;
+            color: #7b1fa2;
+        }
+
+        .type-project_activity {
+            background: #e8f5e8;
+            color: #388e3c;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin-top: 30px;
+        }
+
+        .pagination button {
+            padding: 10px 15px;
+            border: 1px solid #e9ecef;
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .pagination button:hover:not(:disabled) {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .pagination button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #6c757d;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px;
+            text-align: center;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6c757d;
+        }
+
+        .empty-state h3 {
+            margin-bottom: 10px;
+            color: #495057;
+        }
+
+        .address-display {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            color: #495057;
+            word-break: break-all;
+        }
+
+        @media (max-width: 768px) {
+            .search-container {
+                flex-direction: column;
+            }
+            
+            .search-input {
+                min-width: 100%;
+            }
+            
+            .transaction-details {
+                grid-template-columns: 1fr;
+            }
+            
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔗 Transaction History</h1>
+            <p>View your blockchain transaction history and activity</p>
+        </div>
+
+        <div class="controls">
+            <div class="search-container">
+                <input type="text" id="addressInput" class="search-input" placeholder="Enter Ethereum address (0x...)" />
+                <select id="typeFilter" class="filter-select">
+                    <option value="all">All Transactions</option>
+                    <option value="project_registration">Project Registration</option>
+                    <option value="token_transfer">Token Transfer</option>
+                    <option value="project_activity">Project Activity</option>
+                </select>
+                <button onclick="loadTransactions()" style="padding: 12px 30px; background: #667eea; color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; transition: all 0.3s ease;">
+                    Load Transactions
+                </button>
+            </div>
+
+            <div id="addressDisplay" class="address-display" style="display: none;">
+                <strong>Viewing transactions for:</strong> <span id="currentAddress"></span>
+            </div>
+
+            <div id="statsContainer" class="stats-grid" style="display: none;">
+                <!-- Stats will be populated here -->
+            </div>
+        </div>
+
+        <div class="transactions-container">
+            <div id="loadingState" class="loading" style="display: none;">
+                <h3>Loading transactions...</h3>
+                <p>Please wait while we fetch your transaction history.</p>
+            </div>
+
+            <div id="errorState" class="error" style="display: none;">
+                <h3>Error Loading Transactions</h3>
+                <p id="errorMessage"></p>
+            </div>
+
+            <div id="emptyState" class="empty-state" style="display: none;">
+                <h3>No Transactions Found</h3>
+                <p>No transactions found for this address. Try a different address or check your connection.</p>
+            </div>
+
+            <div id="transactionsList">
+                <!-- Transactions will be populated here -->
+            </div>
+
+            <div id="paginationContainer" class="pagination" style="display: none;">
+                <!-- Pagination will be populated here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentAddress = '';
+        let currentPage = 1;
+        let totalPages = 1;
+        let currentType = 'all';
+
+        // Load transactions for the entered address
+        async function loadTransactions() {
+            const address = document.getElementById('addressInput').value.trim();
+            const type = document.getElementById('typeFilter').value;
+            
+            if (!address) {
+                alert('Please enter an Ethereum address');
+                return;
+            }
+
+            if (!isValidAddress(address)) {
+                alert('Please enter a valid Ethereum address');
+                return;
+            }
+
+            currentAddress = address;
+            currentType = type;
+            currentPage = 1;
+
+            showLoading();
+            hideError();
+            hideEmpty();
+
+            try {
+                const response = await fetch(`/api/transactions/${address}?page=${currentPage}&limit=20&type=${type}`, {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                if (data.success) {
+                    displayTransactions(data.data.transactions);
+                    displayStats(data.data.stats);
+                    displayPagination(data.data.pagination);
+                    showAddressDisplay();
+                } else {
+                    throw new Error(data.error || 'Failed to load transactions');
+                }
+            } catch (error) {
+                console.error('Error loading transactions:', error);
+                showError(error.message);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // Display transactions in the UI
+        function displayTransactions(transactions) {
+            const container = document.getElementById('transactionsList');
+            
+            if (transactions.length === 0) {
+                showEmpty();
+                return;
+            }
+
+            container.innerHTML = transactions.map(tx => `
+                <div class="transaction-item" onclick="showTransactionDetails('${tx.hash}')">
+                    <div class="transaction-header">
+                        <div class="transaction-hash">${tx.hash}</div>
+                        <div class="transaction-status status-${tx.status}">${tx.status}</div>
+                    </div>
+                    
+                    <div class="transaction-details">
+                        <div class="detail-item">
+                            <div class="detail-label">From</div>
+                            <div class="detail-value">${formatAddress(tx.from)}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">To</div>
+                            <div class="detail-value">${formatAddress(tx.to)}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Value</div>
+                            <div class="detail-value">${tx.value} ETH</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Gas Used</div>
+                            <div class="detail-value">${tx.gasUsed}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Timestamp</div>
+                            <div class="detail-value">${formatDate(tx.timestamp)}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Block</div>
+                            <div class="detail-value">#${tx.blockNumber}</div>
+                        </div>
+                    </div>
+                    
+                    <div class="transaction-type type-${tx.type}">${formatTransactionType(tx.type)}</div>
+                </div>
+            `).join('');
+        }
+
+        // Display transaction statistics
+        function displayStats(stats) {
+            const container = document.getElementById('statsContainer');
+            container.innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-value">${stats.totalTransactions}</div>
+                    <div class="stat-label">Total Transactions</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${stats.successfulTransactions}</div>
+                    <div class="stat-label">Successful</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${stats.failedTransactions}</div>
+                    <div class="stat-label">Failed</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${formatNumber(stats.totalGasUsed)}</div>
+                    <div class="stat-label">Total Gas Used</div>
+                </div>
+            `;
+            container.style.display = 'grid';
+        }
+
+        // Display pagination controls
+        function displayPagination(pagination) {
+            const container = document.getElementById('paginationContainer');
+            
+            if (pagination.totalPages <= 1) {
+                container.style.display = 'none';
+                return;
+            }
+
+            container.innerHTML = `
+                <button onclick="changePage(${pagination.currentPage - 1})" ${!pagination.hasPrev ? 'disabled' : ''}>
+                    Previous
+                </button>
+                <span>Page ${pagination.currentPage} of ${pagination.totalPages}</span>
+                <button onclick="changePage(${pagination.currentPage + 1})" ${!pagination.hasNext ? 'disabled' : ''}>
+                    Next
+                </button>
+            `;
+            container.style.display = 'flex';
+        }
+
+        // Change page
+        async function changePage(page) {
+            if (page < 1 || page > totalPages) return;
+            
+            currentPage = page;
+            showLoading();
+            
+            try {
+                const response = await fetch(`/api/transactions/${currentAddress}?page=${currentPage}&limit=20&type=${currentType}`, {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayTransactions(data.data.transactions);
+                    displayPagination(data.data.pagination);
+                }
+            } catch (error) {
+                console.error('Error changing page:', error);
+                showError('Failed to load page');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // Show transaction details (modal or new page)
+        async function showTransactionDetails(hash) {
+            try {
+                const response = await fetch(`/api/transactions/details/${hash}`, {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Open transaction in Etherscan
+                    window.open(`https://sepolia.etherscan.io/tx/${hash}`, '_blank');
+                }
+            } catch (error) {
+                console.error('Error fetching transaction details:', error);
+                alert('Failed to load transaction details');
+            }
+        }
+
+        // Utility functions
+        function isValidAddress(address) {
+            return /^0x[a-fA-F0-9]{40}$/.test(address);
+        }
+
+        function formatAddress(address) {
+            if (!address) return 'N/A';
+            return `${address.slice(0, 6)}...${address.slice(-4)}`;
+        }
+
+        function formatDate(timestamp) {
+            return new Date(timestamp).toLocaleString();
+        }
+
+        function formatTransactionType(type) {
+            const types = {
+                'project_registration': 'Project Registration',
+                'token_transfer': 'Token Transfer',
+                'project_activity': 'Project Activity'
+            };
+            return types[type] || type;
+        }
+
+        function formatNumber(num) {
+            return new Intl.NumberFormat().format(num);
+        }
+
+        // UI state functions
+        function showLoading() {
+            document.getElementById('loadingState').style.display = 'block';
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingState').style.display = 'none';
+        }
+
+        function showError(message) {
+            document.getElementById('errorMessage').textContent = message;
+            document.getElementById('errorState').style.display = 'block';
+        }
+
+        function hideError() {
+            document.getElementById('errorState').style.display = 'none';
+        }
+
+        function showEmpty() {
+            document.getElementById('emptyState').style.display = 'block';
+        }
+
+        function hideEmpty() {
+            document.getElementById('emptyState').style.display = 'none';
+        }
+
+        function showAddressDisplay() {
+            document.getElementById('currentAddress').textContent = currentAddress;
+            document.getElementById('addressDisplay').style.display = 'block';
+        }
+
+        // Load sample data on page load (for demo purposes)
+        window.addEventListener('load', () => {
+            // You can pre-populate with a sample address for demo
+            // document.getElementById('addressInput').value = '0x8750c1719E32294260e596c80a04818533e2C643';
+        });
+    </script>
+</body>
+</html>

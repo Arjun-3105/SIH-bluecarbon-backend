@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Registration Progress - Carbon Credit Registry</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .progress-container {
+            padding: 40px;
+        }
+
+        .overall-progress {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .progress-circle {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: conic-gradient(#667eea 0deg, #e9ecef 0deg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .progress-circle::before {
+            content: '';
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: white;
+            position: absolute;
+        }
+
+        .progress-percentage {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #667eea;
+            z-index: 1;
+        }
+
+        .progress-status {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 10px;
+        }
+
+        .steps-container {
+            margin-top: 30px;
+        }
+
+        .step {
+            display: flex;
+            align-items: center;
+            padding: 20px;
+            margin-bottom: 15px;
+            border-radius: 15px;
+            background: #f8f9fa;
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+        .step.completed {
+            background: #d4edda;
+            border-color: #28a745;
+        }
+
+        .step.in-progress {
+            background: #fff3cd;
+            border-color: #ffc107;
+            animation: pulse 2s infinite;
+        }
+
+        .step.failed {
+            background: #f8d7da;
+            border-color: #dc3545;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+            100% { transform: scale(1); }
+        }
+
+        .step-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 20px;
+            font-size: 1.2rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .step-icon.pending {
+            background: #e9ecef;
+            color: #6c757d;
+        }
+
+        .step-icon.in-progress {
+            background: #ffc107;
+            color: white;
+            animation: spin 1s linear infinite;
+        }
+
+        .step-icon.completed {
+            background: #28a745;
+            color: white;
+        }
+
+        .step-icon.failed {
+            background: #dc3545;
+            color: white;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .step-content {
+            flex: 1;
+        }
+
+        .step-name {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 5px;
+        }
+
+        .step-description {
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+
+        .step-timestamp {
+            font-size: 0.8rem;
+            color: #6c757d;
+            margin-top: 5px;
+        }
+
+        .transaction-info {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 15px;
+            margin-top: 30px;
+            display: none;
+        }
+
+        .transaction-info.show {
+            display: block;
+        }
+
+        .transaction-hash {
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            color: #667eea;
+            word-break: break-all;
+            margin-bottom: 10px;
+        }
+
+        .transaction-link {
+            display: inline-block;
+            padding: 8px 16px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+        }
+
+        .transaction-link:hover {
+            background: #5a6fd8;
+            transform: translateY(-2px);
+        }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 20px;
+            border-radius: 15px;
+            margin-top: 20px;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        .success-message {
+            background: #d4edda;
+            color: #155724;
+            padding: 20px;
+            border-radius: 15px;
+            margin-top: 20px;
+            display: none;
+        }
+
+        .success-message.show {
+            display: block;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+
+        .refresh-button {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: #667eea;
+            color: white;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            transition: all 0.3s ease;
+        }
+
+        .refresh-button:hover {
+            background: #5a6fd8;
+            transform: scale(1.1);
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                margin: 10px;
+                border-radius: 15px;
+            }
+            
+            .header {
+                padding: 20px;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .progress-container {
+                padding: 20px;
+            }
+            
+            .step {
+                padding: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🌱 Project Registration</h1>
+            <p>Registering your carbon credit project on the blockchain</p>
+        </div>
+
+        <div class="progress-container">
+            <div class="overall-progress">
+                <div class="progress-circle" id="progressCircle">
+                    <div class="progress-percentage" id="progressPercentage">0%</div>
+                </div>
+                <div class="progress-status" id="progressStatus">Initializing...</div>
+            </div>
+
+            <div class="steps-container" id="stepsContainer">
+                <!-- Steps will be populated here -->
+            </div>
+
+            <div class="transaction-info" id="transactionInfo">
+                <h3>Transaction Details</h3>
+                <div class="transaction-hash" id="transactionHash"></div>
+                <a href="#" class="transaction-link" id="transactionLink" target="_blank">
+                    View on Etherscan
+                </a>
+            </div>
+
+            <div class="error-message" id="errorMessage">
+                <h3>Registration Failed</h3>
+                <p id="errorText"></p>
+            </div>
+
+            <div class="success-message" id="successMessage">
+                <h3>Registration Successful!</h3>
+                <p>Your project has been successfully registered on the blockchain and carbon credits have been minted.</p>
+            </div>
+        </div>
+    </div>
+
+    <button class="refresh-button" onclick="refreshProgress()" title="Refresh Progress">
+        🔄
+    </button>
+
+    <script>
+        let sessionId = null;
+        let refreshInterval = null;
+
+        // Initialize progress tracking
+        function initializeProgress() {
+            // Get session ID from URL parameters
+            const urlParams = new URLSearchParams(window.location.search);
+            sessionId = urlParams.get('sessionId');
+            
+            if (!sessionId) {
+                showError('No session ID provided');
+                return;
+            }
+
+            // Start polling for progress updates
+            startProgressPolling();
+        }
+
+        // Start polling for progress updates
+        function startProgressPolling() {
+            refreshProgress();
+            refreshInterval = setInterval(refreshProgress, 2000); // Poll every 2 seconds
+        }
+
+        // Refresh progress data
+        async function refreshProgress() {
+            if (!sessionId) return;
+
+            try {
+                const response = await fetch(`/api/progress/${sessionId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                if (data.success) {
+                    updateProgressDisplay(data.data);
+                } else {
+                    throw new Error(data.error || 'Failed to get progress');
+                }
+            } catch (error) {
+                console.error('Error refreshing progress:', error);
+                // Don't show error immediately, might be temporary network issue
+            }
+        }
+
+        // Update progress display
+        function updateProgressDisplay(registration) {
+            // Update overall progress
+            updateOverallProgress(registration.progress, registration.status);
+            
+            // Update steps
+            updateSteps(registration.steps);
+            
+            // Update transaction info if available
+            if (registration.transactionHash) {
+                updateTransactionInfo(registration.transactionHash);
+            }
+            
+            // Handle completion or failure
+            if (registration.status === 'completed') {
+                handleCompletion(registration);
+            } else if (registration.status === 'failed') {
+                handleFailure(registration);
+            }
+        }
+
+        // Update overall progress circle
+        function updateOverallProgress(progress, status) {
+            const circle = document.getElementById('progressCircle');
+            const percentage = document.getElementById('progressPercentage');
+            const statusText = document.getElementById('progressStatus');
+
+            // Update progress circle
+            const degrees = (progress / 100) * 360;
+            circle.style.background = `conic-gradient(#667eea ${degrees}deg, #e9ecef ${degrees}deg)`;
+            
+            // Update percentage
+            percentage.textContent = `${progress}%`;
+            
+            // Update status text
+            const statusTexts = {
+                'initializing': 'Initializing...',
+                'in_progress': 'Processing...',
+                'completed': 'Completed!',
+                'failed': 'Failed'
+            };
+            statusText.textContent = statusTexts[status] || 'Processing...';
+        }
+
+        // Update steps display
+        function updateSteps(steps) {
+            const container = document.getElementById('stepsContainer');
+            
+            container.innerHTML = steps.map((step, index) => `
+                <div class="step ${step.status}">
+                    <div class="step-icon ${step.status}">
+                        ${getStepIcon(step.status)}
+                    </div>
+                    <div class="step-content">
+                        <div class="step-name">${step.name}</div>
+                        <div class="step-description">${getStepDescription(step.id)}</div>
+                        ${step.timestamp ? `<div class="step-timestamp">${formatTimestamp(step.timestamp)}</div>` : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Get step icon based on status
+        function getStepIcon(status) {
+            const icons = {
+                'pending': '⏳',
+                'in_progress': '🔄',
+                'completed': '✅',
+                'failed': '❌'
+            };
+            return icons[status] || '⏳';
+        }
+
+        // Get step description
+        function getStepDescription(stepId) {
+            const descriptions = {
+                'validation': 'Validating project data and requirements',
+                'ipfs_upload': 'Uploading project metadata to IPFS',
+                'blockchain_prep': 'Preparing blockchain transaction',
+                'registration': 'Registering project on blockchain',
+                'token_mint': 'Minting carbon credit tokens',
+                'confirmation': 'Confirming transaction and finalizing'
+            };
+            return descriptions[stepId] || '';
+        }
+
+        // Update transaction info
+        function updateTransactionInfo(transactionHash) {
+            const info = document.getElementById('transactionInfo');
+            const hash = document.getElementById('transactionHash');
+            const link = document.getElementById('transactionLink');
+
+            hash.textContent = `Transaction Hash: ${transactionHash}`;
+            link.href = `https://sepolia.etherscan.io/tx/${transactionHash}`;
+            info.classList.add('show');
+        }
+
+        // Handle completion
+        function handleCompletion(registration) {
+            clearInterval(refreshInterval);
+            document.getElementById('successMessage').classList.add('show');
+        }
+
+        // Handle failure
+        function handleFailure(registration) {
+            clearInterval(refreshInterval);
+            const errorText = document.getElementById('errorText');
+            errorText.textContent = registration.error || 'An unknown error occurred';
+            document.getElementById('errorMessage').classList.add('show');
+        }
+
+        // Show error
+        function showError(message) {
+            const errorText = document.getElementById('errorText');
+            errorText.textContent = message;
+            document.getElementById('errorMessage').classList.add('show');
+        }
+
+        // Format timestamp
+        function formatTimestamp(timestamp) {
+            return new Date(timestamp).toLocaleString();
+        }
+
+        // Start a new registration
+        async function startRegistration(projectId, userAddress) {
+            try {
+                const response = await fetch(`/api/progress/start/${projectId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ userAddress })
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    sessionId = data.data.sessionId;
+                    // Redirect to progress page
+                    window.location.href = `project-registration-progress.html?sessionId=${sessionId}`;
+                } else {
+                    throw new Error(data.error || 'Failed to start registration');
+                }
+            } catch (error) {
+                console.error('Error starting registration:', error);
+                showError(error.message);
+            }
+        }
+
+        // Initialize when page loads
+        window.addEventListener('load', initializeProgress);
+
+        // Clean up on page unload
+        window.addEventListener('beforeunload', () => {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+            }
+        });
+    </script>
+</body>
+</html>

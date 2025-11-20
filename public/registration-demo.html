@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Registration Demo - Carbon Credit Registry</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .demo-container {
+            padding: 40px;
+        }
+
+        .demo-section {
+            margin-bottom: 40px;
+            padding: 30px;
+            background: #f8f9fa;
+            border-radius: 15px;
+            border: 1px solid #e9ecef;
+        }
+
+        .demo-section h2 {
+            color: #495057;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .demo-button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-right: 15px;
+            margin-bottom: 15px;
+        }
+
+        .demo-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+        }
+
+        .demo-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .project-card {
+            background: white;
+            border: 1px solid #e9ecef;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .project-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+
+        .project-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .project-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .project-status {
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-registering {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .status-registered {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .project-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .detail-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .detail-label {
+            font-size: 0.8rem;
+            color: #6c757d;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 5px;
+        }
+
+        .detail-value {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .progress-link {
+            background: #28a745;
+            color: white;
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+        }
+
+        .progress-link:hover {
+            background: #218838;
+            transform: translateY(-1px);
+        }
+
+        .transaction-link {
+            background: #17a2b8;
+            color: white;
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+        }
+
+        .transaction-link:hover {
+            background: #138496;
+            transform: translateY(-1px);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #6c757d;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            text-align: center;
+        }
+
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            text-align: center;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            color: #6c757d;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        @media (max-width: 768px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+            
+            .project-details {
+                grid-template-columns: 1fr;
+            }
+            
+            .action-buttons {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🌱 Project Registration Demo</h1>
+            <p>Demonstrate project registration and token minting process</p>
+        </div>
+
+        <div class="demo-container">
+            <!-- Statistics -->
+            <div class="stats-grid" id="statsGrid">
+                <div class="stat-card">
+                    <div class="stat-value" id="totalProjects">0</div>
+                    <div class="stat-label">Total Projects</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="registeredProjects">0</div>
+                    <div class="stat-label">Registered</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="pendingProjects">0</div>
+                    <div class="stat-label">Pending</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="totalCredits">0</div>
+                    <div class="stat-label">Total Credits</div>
+                </div>
+            </div>
+
+            <!-- Demo Controls -->
+            <div class="demo-section">
+                <h2>🚀 Demo Controls</h2>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="projectId">Project ID</label>
+                        <input type="text" id="projectId" placeholder="Enter project ID" value="DEMO_PROJECT_001">
+                    </div>
+                    <div class="form-group">
+                        <label for="userAddress">User Address</label>
+                        <input type="text" id="userAddress" placeholder="Enter Ethereum address" value="0x8750c1719E32294260e596c80a04818533e2C643">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="co2Estimate">CO2 Estimate (tons)</label>
+                    <input type="number" id="co2Estimate" placeholder="Enter CO2 estimate" value="1000">
+                </div>
+                <div class="form-group">
+                    <label for="projectName">Project Name</label>
+                    <input type="text" id="projectName" placeholder="Enter project name" value="Mangrove Restoration Project">
+                </div>
+                <div class="form-group">
+                    <label for="projectDescription">Project Description</label>
+                    <textarea id="projectDescription" rows="3" placeholder="Enter project description">A comprehensive mangrove restoration project aimed at sequestering carbon and protecting coastal ecosystems.</textarea>
+                </div>
+                
+                <button class="demo-button" onclick="startRegistration()">
+                    🌱 Start Project Registration
+                </button>
+                <button class="demo-button" onclick="loadSampleProjects()">
+                    📋 Load Sample Projects
+                </button>
+                <button class="demo-button" onclick="clearProjects()">
+                    🗑️ Clear All Projects
+                </button>
+            </div>
+
+            <!-- Projects List -->
+            <div class="demo-section">
+                <h2>📊 Projects</h2>
+                <div id="projectsList">
+                    <div class="loading">
+                        <h3>No projects loaded</h3>
+                        <p>Click "Load Sample Projects" to see example projects or start a new registration.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Messages -->
+            <div id="messageContainer"></div>
+        </div>
+    </div>
+
+    <script>
+        let projects = [];
+        let activeRegistrations = new Map();
+
+        // Initialize demo
+        function initializeDemo() {
+            loadSampleProjects();
+        }
+
+        // Load sample projects
+        function loadSampleProjects() {
+            projects = [
+                {
+                    id: 'MANGROVE_RESTORATION_2024',
+                    name: 'Mangrove Restoration Project',
+                    description: 'Comprehensive mangrove restoration in Sundarbans',
+                    co2Estimate: 5000,
+                    status: 'registered',
+                    tokenId: '1',
+                    transactionHash: '0x1234567890abcdef1234567890abcdef12345678',
+                    credits: 5000
+                },
+                {
+                    id: 'OCEAN_CLEANUP_2024',
+                    name: 'Ocean Plastic Cleanup',
+                    description: 'Ocean plastic cleanup initiative',
+                    co2Estimate: 3000,
+                    status: 'registered',
+                    tokenId: '2',
+                    transactionHash: '0xabcdef1234567890abcdef1234567890abcdef12',
+                    credits: 3000
+                },
+                {
+                    id: 'SEAGRASS_PRESERVATION_2024',
+                    name: 'Seagrass Meadow Protection',
+                    description: 'Seagrass meadow protection program',
+                    co2Estimate: 2000,
+                    status: 'pending',
+                    tokenId: null,
+                    transactionHash: null,
+                    credits: 0
+                }
+            ];
+            
+            updateProjectsDisplay();
+            updateStats();
+        }
+
+        // Start project registration
+        async function startRegistration() {
+            const projectId = document.getElementById('projectId').value;
+            const userAddress = document.getElementById('userAddress').value;
+            const co2Estimate = parseFloat(document.getElementById('co2Estimate').value);
+            const projectName = document.getElementById('projectName').value;
+            const projectDescription = document.getElementById('projectDescription').value;
+
+            if (!projectId || !userAddress || !co2Estimate) {
+                showMessage('Please fill in all required fields', 'error');
+                return;
+            }
+
+            // Create new project
+            const newProject = {
+                id: projectId,
+                name: projectName,
+                description: projectDescription,
+                co2Estimate: co2Estimate,
+                status: 'registering',
+                tokenId: null,
+                transactionHash: null,
+                credits: 0
+            };
+
+            projects.push(newProject);
+            updateProjectsDisplay();
+            updateStats();
+
+            showMessage(`Starting registration for project: ${projectId}`, 'success');
+
+            try {
+                // Simulate API call to start registration
+                const response = await fetch(`/api/progress/start/${projectId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ userAddress })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success) {
+                        // Redirect to progress page
+                        window.open(`project-registration-progress.html?sessionId=${data.data.sessionId}`, '_blank');
+                    } else {
+                        throw new Error(data.error || 'Failed to start registration');
+                    }
+                } else {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+            } catch (error) {
+                console.error('Error starting registration:', error);
+                showMessage(`Error: ${error.message}`, 'error');
+                
+                // Simulate registration process for demo
+                simulateRegistration(newProject);
+            }
+        }
+
+        // Simulate registration process for demo
+        function simulateRegistration(project) {
+            const sessionId = `demo_${Date.now()}`;
+            activeRegistrations.set(project.id, { sessionId, status: 'in_progress' });
+
+            // Simulate progress updates
+            setTimeout(() => {
+                project.status = 'registered';
+                project.tokenId = Math.floor(Math.random() * 1000).toString();
+                project.transactionHash = '0x' + Math.random().toString(16).substr(2, 64);
+                project.credits = Math.floor(project.co2Estimate / 1000);
+                
+                activeRegistrations.delete(project.id);
+                updateProjectsDisplay();
+                updateStats();
+                
+                showMessage(`Project ${project.id} registered successfully!`, 'success');
+            }, 5000);
+        }
+
+        // Update projects display
+        function updateProjectsDisplay() {
+            const container = document.getElementById('projectsList');
+            
+            if (projects.length === 0) {
+                container.innerHTML = `
+                    <div class="loading">
+                        <h3>No projects loaded</h3>
+                        <p>Click "Load Sample Projects" to see example projects or start a new registration.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = projects.map(project => `
+                <div class="project-card">
+                    <div class="project-header">
+                        <div class="project-title">${project.name}</div>
+                        <div class="project-status status-${project.status}">${project.status}</div>
+                    </div>
+                    
+                    <div class="project-details">
+                        <div class="detail-item">
+                            <div class="detail-label">Project ID</div>
+                            <div class="detail-value">${project.id}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">CO2 Estimate</div>
+                            <div class="detail-value">${project.co2Estimate} tons</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Carbon Credits</div>
+                            <div class="detail-value">${project.credits} BCARB</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Token ID</div>
+                            <div class="detail-value">${project.tokenId || 'N/A'}</div>
+                        </div>
+                    </div>
+                    
+                    <div class="action-buttons">
+                        ${project.status === 'registering' ? `
+                            <a href="project-registration-progress.html?sessionId=demo_${project.id}" class="progress-link" target="_blank">
+                                📊 View Progress
+                            </a>
+                        ` : ''}
+                        ${project.transactionHash ? `
+                            <a href="https://sepolia.etherscan.io/tx/${project.transactionHash}" class="transaction-link" target="_blank">
+                                🔗 View Transaction
+                            </a>
+                        ` : ''}
+                        ${project.status === 'registered' ? `
+                            <button class="demo-button" onclick="viewTransactionHistory('${project.id}')">
+                                📈 View History
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Update statistics
+        function updateStats() {
+            const totalProjects = projects.length;
+            const registeredProjects = projects.filter(p => p.status === 'registered').length;
+            const pendingProjects = projects.filter(p => p.status === 'pending').length;
+            const totalCredits = projects.reduce((sum, p) => sum + p.credits, 0);
+
+            document.getElementById('totalProjects').textContent = totalProjects;
+            document.getElementById('registeredProjects').textContent = registeredProjects;
+            document.getElementById('pendingProjects').textContent = pendingProjects;
+            document.getElementById('totalCredits').textContent = totalCredits.toLocaleString();
+        }
+
+        // Clear all projects
+        function clearProjects() {
+            projects = [];
+            activeRegistrations.clear();
+            updateProjectsDisplay();
+            updateStats();
+            showMessage('All projects cleared', 'success');
+        }
+
+        // View transaction history
+        function viewTransactionHistory(projectId) {
+            const project = projects.find(p => p.id === projectId);
+            if (project && project.userAddress) {
+                window.open(`transaction-history.html?address=${project.userAddress}`, '_blank');
+            } else {
+                showMessage('No user address available for this project', 'error');
+            }
+        }
+
+        // Show message
+        function showMessage(message, type) {
+            const container = document.getElementById('messageContainer');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = type;
+            messageDiv.textContent = message;
+            
+            container.appendChild(messageDiv);
+            
+            setTimeout(() => {
+                messageDiv.remove();
+            }, 5000);
+        }
+
+        // Initialize when page loads
+        window.addEventListener('load', initializeDemo);
+    </script>
+</body>
+</html>

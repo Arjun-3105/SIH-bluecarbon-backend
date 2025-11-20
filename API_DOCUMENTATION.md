@@ -345,6 +345,176 @@ Monitor the following metrics:
 - Contract event emissions
 - Wallet balance
 
+## Verification Endpoints
+
+### 1. Get Pending Evidence
+
+**GET** `/api/verification/pending-evidence`
+
+Retrieves all evidence pending verification for verifiers to review.
+
+**Response:**
+```json
+{
+  "success": true,
+  "evidence": [
+    {
+      "_id": "68d0a1b711605742bdef4974",
+      "projectId": "BC-MFTHXD6D-JA5PLX",
+      "timestampISO": "2025-09-21T10:15:30.000Z",
+      "gps": {
+        "latitude": 28.44321,
+        "longitude": 77.5065,
+        "precision": 5
+      },
+      "photos": ["site_photo_1.png", "site_photo_2.png"],
+      "videos": ["inspection_video_1.mp4"],
+      "ecosystemType": "mangrove",
+      "soilCores": [
+        {
+          "depth_cm": 10,
+          "carbon_kg": 2.5
+        }
+      ],
+      "co2Estimate": 15,
+      "evidenceHash": "ab12cd34ef5678901234567890abcdef1234567890abcdef1234567890abcd",
+      "status": "PENDING",
+      "submittedAt": "2025-09-21T10:15:35.000Z",
+      "inspector": {
+        "name": "John Inspector",
+        "email": "john@example.com"
+      }
+    }
+  ],
+  "count": 1
+}
+```
+
+### 2. Submit Evidence Verification
+
+**POST** `/api/verification/submit`
+
+Allows verifiers to submit verification for evidence data. When approved, minimal essential data is stored on blockchain while detailed data remains off-chain.
+
+**Request Body:**
+```json
+{
+  "evidenceId": "68d0a1b711605742bdef4974",
+  "projectId": "BC-MFTHXD6D-JA5PLX",
+  "status": "APPROVED",
+  "comments": "Evidence verified successfully",
+  "gps": {
+    "latitude": 28.44321,
+    "longitude": 77.5065,
+    "precision": 5
+  },
+  "ecosystemType": "mangrove",
+  "soilCores": [
+    {
+      "depth_cm": 10,
+      "carbon_kg": 2.5
+    }
+  ],
+  "co2Estimate": 15,
+  "photos": ["site_photo_1.png", "site_photo_2.png"],
+  "videos": ["inspection_video_1.mp4"],
+  "evidenceHash": "ab12cd34ef5678901234567890abcdef1234567890abcdef1234567890abcd"
+}
+```
+
+**Response (Approved):**
+```json
+{
+  "success": true,
+  "message": "Evidence verified and registered on blockchain successfully",
+  "verification": {
+    "_id": "...",
+    "projectId": "...",
+    "evidenceId": "68d0a1b711605742bdef4974",
+    "status": "Approved",
+    "comments": "Evidence verified successfully",
+    "verifier": "...",
+    "verifiedAt": "2025-09-21T10:15:35.000Z",
+    "blockchain": {
+      "tokenId": "1",
+      "transactionHash": "0x...",
+      "blockNumber": 12345678,
+      "ipfsHash": "Qm...",
+      "isRegistered": true
+    }
+  },
+  "blockchainResult": {
+    "tokenId": "1",
+    "transactionHash": "0x...",
+    "blockNumber": 12345678,
+    "ipfsHash": "Qm...",
+    "gasUsed": "234567"
+  },
+  "evidence": {
+    "id": "68d0a1b711605742bdef4974",
+    "status": "APPROVED",
+    "verifiedAt": "2025-09-21T10:15:35.000Z"
+  }
+}
+```
+
+**Response (Rejected):**
+```json
+{
+  "success": true,
+  "message": "Evidence verification completed (rejected)",
+  "verification": {
+    "_id": "...",
+    "status": "Rejected",
+    "comments": "Insufficient evidence provided"
+  },
+  "evidence": {
+    "id": "68d0a1b711605742bdef4974",
+    "status": "REJECTED",
+    "verifiedAt": "2025-09-21T10:15:35.000Z"
+  }
+}
+```
+
+**Example:**
+```bash
+curl -X POST http://localhost:5000/api/verification/submit \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{
+    "evidenceId": "68d0a1b711605742bdef4974",
+    "status": "APPROVED",
+    "comments": "Evidence verified successfully",
+    "co2Estimate": 15,
+    "evidenceHash": "ab12cd34ef5678901234567890abcdef1234567890abcdef1234567890abcd"
+  }'
+```
+
+**Required Fields:**
+- `evidenceId`: The ID of the evidence to verify
+- `status`: Either "APPROVED" or "REJECTED"
+- `evidenceHash`: Hash of the evidence data for immutability
+
+**Optional Fields:**
+- `comments`: Verifier comments
+- `gps`: GPS coordinates (if different from original)
+- `ecosystemType`: Type of ecosystem
+- `soilCores`: Soil core data
+- `co2Estimate`: CO2 sequestration estimate
+- `photos`: Photo references
+- `videos`: Video references
+
+**Blockchain Storage:**
+When evidence is approved, only essential data is stored on-chain:
+- Project ID
+- Project name
+- Ecosystem type
+- CO2 estimate (as carbon credits)
+- Basic location info
+- IPFS hash for detailed metadata
+
+All detailed evidence data (photos, videos, sensor readings, etc.) remains off-chain in the database and IPFS.
+
 ## Support
 
 For issues or questions:

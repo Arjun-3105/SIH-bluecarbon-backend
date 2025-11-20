@@ -1,0 +1,199 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BlueCarbon Dapp (Sepolia)</title>
+  <style>
+    body { font-family: system-ui, Arial, sans-serif; margin: 24px; }
+    .card { border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+    input, button, textarea { padding: 8px; margin: 4px 0; width: 100%; }
+    label { font-weight: 600; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .muted { color: #666; font-size: 12px; }
+    code { background: #f6f8fa; padding: 2px 4px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>BlueCarbon Dapp</h1>
+  <p>Connect MetaMask on Sepolia to interact with the Registry and Token.</p>
+
+  <div class="card">
+    <button id="connect">Connect MetaMask</button>
+    <div id="account" class="muted"></div>
+    <div id="contracts" class="muted"></div>
+  </div>
+
+  <div class="card">
+    <h3>Balances</h3>
+    <div class="row">
+      <div>
+        <label>Address</label>
+        <input id="balanceAddress" placeholder="0x... (defaults to connected)" />
+        <button id="refreshBalance">Refresh BCARB Balance</button>
+        <div id="balanceOut"></div>
+      </div>
+      <div>
+        <label>Token ID</label>
+        <input id="queryTokenId" placeholder="e.g. 0" />
+        <button id="queryToken">Query Project</button>
+        <pre id="tokenOut" style="white-space:pre-wrap"></pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Register Project (mints NFT + BCARB)</h3>
+    <label>Project ID (string)</label>
+    <input id="projectId" placeholder="PROJECT-001" />
+    <label>Credits (uint16)</label>
+    <input id="credits" placeholder="1000" />
+    <label>Project Owner (address)</label>
+    <input id="owner" placeholder="0x..." />
+    <label>IPFS Hash (bytes32 as hex, 0x...32 bytes)</label>
+    <input id="ipfs" placeholder="0x..." />
+    <button id="register">Register</button>
+    <div id="registerOut"></div>
+  </div>
+
+  <div class="card">
+    <h3>Mint ERC20 from NFT Credits</h3>
+    <label>Token ID</label>
+    <input id="mintTokenId" placeholder="0" />
+    <label>Amount</label>
+    <input id="mintAmount" placeholder="100" />
+    <label>To</label>
+    <input id="mintTo" placeholder="0x..." />
+    <button id="mint">Mint</button>
+    <div id="mintOut"></div>
+  </div>
+
+  <div class="card">
+    <h3>Transfer BCARB</h3>
+    <label>To</label>
+    <input id="transferTo" placeholder="0x..." />
+    <label>Amount</label>
+    <input id="transferAmount" placeholder="100" />
+    <button id="transfer">Transfer</button>
+    <div id="transferOut"></div>
+  </div>
+
+  <script type="module">
+    import { ethers } from "https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.min.js";
+
+    let provider, signer, account;
+    let contracts;
+
+    async function loadConfig() {
+      const res = await fetch("/contracts.sepolia.json");
+      if (!res.ok) throw new Error("Missing contracts.sepolia.json. Run deploy:sepolia first.");
+      return res.json();
+    }
+
+    async function init() {
+      contracts = await loadConfig();
+      document.getElementById("contracts").textContent = `BlueCarbon: ${contracts.BlueCarbon.address} | Registry: ${contracts.CarbonCreditRegistry.address}`;
+    }
+
+    async function connect() {
+      if (!window.ethereum) { alert("MetaMask not found"); return; }
+      provider = new ethers.BrowserProvider(window.ethereum);
+      await provider.send("eth_requestAccounts", []);
+      signer = await provider.getSigner();
+      account = await signer.getAddress();
+      document.getElementById("account").textContent = `Connected: ${account}`;
+    }
+
+    function getToken() {
+      return new ethers.Contract(contracts.BlueCarbon.address, contracts.BlueCarbon.abi, signer);
+    }
+    function getRegistry() {
+      return new ethers.Contract(contracts.CarbonCreditRegistry.address, contracts.CarbonCreditRegistry.abi, signer);
+    }
+
+    document.getElementById("connect").onclick = connect;
+
+    document.getElementById("refreshBalance").onclick = async () => {
+      try {
+        const addrInput = document.getElementById("balanceAddress").value.trim();
+        const addr = addrInput || account;
+        if (!ethers.isAddress(addr)) {
+          document.getElementById("balanceOut").textContent = "Enter a valid 0x address or leave empty to use your account.";
+          return;
+        }
+        const token = getToken();
+        const bal = await token.balanceOf(addr);
+        document.getElementById("balanceOut").textContent = `BCARB: ${ethers.formatUnits(bal, 18)}`;
+      } catch (e) {
+        document.getElementById("balanceOut").textContent = e.message;
+      }
+    };
+
+    document.getElementById("queryToken").onclick = async () => {
+      try {
+        const id = BigInt(document.getElementById("queryTokenId").value || "0");
+        const reg = getRegistry();
+        const proj = await reg.projects(id);
+        document.getElementById("tokenOut").textContent = JSON.stringify(proj, null, 2);
+      } catch (e) {
+        document.getElementById("tokenOut").textContent = e.message;
+      }
+    };
+
+    document.getElementById("register").onclick = async () => {
+      const out = document.getElementById("registerOut");
+      try {
+        const projectId = document.getElementById("projectId").value;
+        const credits = BigInt(document.getElementById("credits").value);
+        const owner = document.getElementById("owner").value.trim();
+        if (!ethers.isAddress(owner)) { out.textContent = "Owner must be a valid 0x address."; return; }
+        const ipfs = document.getElementById("ipfs").value; // bytes32 hex
+        const reg = getRegistry();
+        const tx = await reg.registerProject(projectId, credits, owner, ipfs);
+        out.textContent = `Sent: ${tx.hash}`;
+        const rcpt = await tx.wait();
+        out.textContent = `Confirmed in block ${rcpt.blockNumber}`;
+      } catch (e) {
+        out.textContent = e.message;
+      }
+    };
+
+    document.getElementById("mint").onclick = async () => {
+      const out = document.getElementById("mintOut");
+      try {
+        const id = BigInt(document.getElementById("mintTokenId").value);
+        const amt = BigInt(document.getElementById("mintAmount").value);
+        const to = document.getElementById("mintTo").value.trim();
+        if (!ethers.isAddress(to)) { out.textContent = "Recipient must be a valid 0x address."; return; }
+        const reg = getRegistry();
+        const tx = await reg.mintERC20Credits(id, amt, to);
+        out.textContent = `Sent: ${tx.hash}`;
+        const rcpt = await tx.wait();
+        out.textContent = `Confirmed in block ${rcpt.blockNumber}`;
+      } catch (e) {
+        out.textContent = e.message;
+      }
+    };
+
+    document.getElementById("transfer").onclick = async () => {
+      const out = document.getElementById("transferOut");
+      try {
+        const to = document.getElementById("transferTo").value.trim();
+        if (!ethers.isAddress(to)) { out.textContent = "Recipient must be a valid 0x address."; return; }
+        const amt = ethers.parseUnits(document.getElementById("transferAmount").value, 18);
+        const token = getToken();
+        const tx = await token.transfer(to, amt);
+        out.textContent = `Sent: ${tx.hash}`;
+        const rcpt = await tx.wait();
+        out.textContent = `Confirmed in block ${rcpt.blockNumber}`;
+      } catch (e) {
+        out.textContent = e.message;
+      }
+    };
+
+    init();
+  </script>
+</body>
+</html>
+
+
