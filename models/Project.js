@@ -13,6 +13,18 @@ const projectStampSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    // Owner's on-chain wallet address (required)
+    ownerWalletAddress: {
+      type: String,
+      required: true,
+      index: true,
+      validate: {
+        validator: function(v) {
+          return v && v.trim().length > 0;
+        },
+        message: 'Owner wallet address is required and cannot be empty'
+      }
+    },
     assignedInspector: {
       type: mongoose.Schema.Types.ObjectId, // verifier
       ref: "User",

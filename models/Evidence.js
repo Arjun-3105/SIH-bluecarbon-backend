@@ -35,6 +35,21 @@ const blueCarbonSchema = new mongoose.Schema({
   projectId: { type: String, ref: "Project" },
   plotId: String,
 
+  // Uploader / owner wallet address (required for evidence submission and project registration)
+  ownerWalletAddress: { 
+    type: String, 
+    required: true,
+    validate: {
+      validator: function(v) {
+        return v && typeof v === 'string' && v.trim().length > 0;
+      },
+      message: 'Owner wallet address is required and cannot be empty'
+    }
+  },
+
+  // Reference to user who created/registered this project/evidence
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+
   inspector: { type: String, ref: "User" },
   submittedAt: { type: Date, default: Date.now },
 

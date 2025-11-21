@@ -1,11 +1,19 @@
-const Project = require("../models/Project");
+const Project = require("../models/Evidence"); // Evidence model contains the actual project data
+const ProjectStamp = require("../models/Project"); // ProjectStamp is the tracking model
 const Verification = require("../models/Verification");
+const User = require("../models/User");
 const blockchainService = require("../utils/blockchainService");
 
 // Get all projects pending verification
 exports.getPendingVerifications = async (req, res) => {
   try {
-    const projects = await Project.find({ status: "Pending" })
+    // Find projects with either "Pending" or "PENDING" status
+    const projects = await Project.find({ 
+      $or: [
+        { status: "Pending" },
+        { status: "PENDING" }
+      ]
+    })
       .populate('createdBy', 'name email')
       .sort({ createdAt: -1 });
 
@@ -77,19 +85,39 @@ exports.approveProject = async (req, res) => {
 
     const verifierId = req.user.id; // from authMiddleware
 
-    // Find the project
-    const project = await Project.findById(projectId);
+    // Find the project - try by _id first (Evidence document), then by projectId string, then by Project_ID
+    let project = null;
+    
+    // Check if projectId is a valid MongoDB ObjectId
+    const mongoose = require('mongoose');
+    if (mongoose.Types.ObjectId.isValid(projectId)) {
+      // Try finding in Evidence model (actual project data)
+      project = await Project.findById(projectId);
+    }
+    
+    // If not found by _id, try finding by projectId string field (Evidence model)
+    if (!project) {
+      project = await Project.findOne({ projectId: projectId });
+    }
+    
+    // If still not found, try finding by Project_ID field (for projects created via registerProject)
+    if (!project) {
+      project = await Project.findOne({ Project_ID: projectId });
+    }
+    
     if (!project) {
       return res.status(404).json({ 
         success: false, 
-        message: "Project not found." 
+        message: `Project not found with ID: ${projectId}. Please check the project ID and try again.` 
       });
     }
 
-    if (project.status !== "Pending") {
+    // Check status - Evidence model uses "PENDING", but projects created via registerProject use "Pending"
+    const isPending = project.status === "Pending" || project.status === "PENDING";
+    if (!isPending) {
       return res.status(400).json({ 
         success: false, 
-        message: "Project is not in pending status." 
+        message: `Project is not in pending status. Current status: ${project.status}` 
       });
     }
 
@@ -114,8 +142,9 @@ exports.approveProject = async (req, res) => {
 
     await verification.save();
 
-    // Update project status to verified
-    project.status = "Verified";
+    // Update project status to Approved/Verified
+    // Use "APPROVED" for Evidence model, but keep "Approved" for backward compatibility
+    project.status = project.status === "PENDING" ? "APPROVED" : "Approved"; // Mark as approved
     project.Verification_Agency = req.user.name || req.user.email;
     project.Verified_Date = new Date();
     project.Carbon_Sequestration_tCO2 = co2Estimate || project.estimatedCO2Sequestration || 0;
@@ -159,6 +188,16 @@ exports.approveProject = async (req, res) => {
       estimatedCO2Sequestration: co2Estimate || project.estimatedCO2Sequestration || 0
     };
 
+    // Attach owner wallet address - REQUIRED for minting tokens to owner
+    const ownerAddress = project.ownerWalletAddress || project.metadata?.ownerAddress;
+    if (!ownerAddress) {
+      return res.status(400).json({
+        success: false,
+        message: "Project owner wallet address is required. Cannot register project on blockchain without owner address."
+      });
+    }
+    projectData.ownerAddress = ownerAddress;
+
     try {
       // Register project on blockchain
       const blockchainResult = await blockchainService.registerProject(projectData);
@@ -174,13 +213,67 @@ exports.approveProject = async (req, res) => {
         lastBlockchainUpdate: new Date()
       };
 
+      // Enrich blockchain info: tokenURI and ERC20 balance for owner (optional)
+      try {
+        const tokenUri = await blockchainService.getTokenURI(blockchainResult.tokenId);
+        project.blockchain.tokenURI = tokenUri;
+      } catch (e) {
+        console.warn('Failed to fetch tokenURI:', e.message || e);
+      }
+
+      try {
+        const ownerAddr = projectData.ownerAddress || project.ownerWalletAddress || project.createdBy;
+        if (ownerAddr) {
+          const erc20Balance = await blockchainService.getERC20Balance(ownerAddr);
+          project.blockchain.ownerAddress = ownerAddr;
+          project.blockchain.erc20Balance = erc20Balance;
+        }
+      } catch (e) {
+        console.warn('Failed to fetch ERC20 balance:', e.message || e);
+      }
+
       await project.save();
+
+      // Mint blue carbon tokens to verifier as reward
+      let verifierRewardResult = null;
+      try {
+        // Get verifier's wallet address
+        const verifier = await User.findById(verifierId);
+        if (!verifier || !verifier.walletAddress) {
+          console.warn('Verifier wallet address not found. Skipping verifier reward minting.');
+        } else {
+          // Get verifierRewardAmount from project metadata
+          const verifierRewardAmount = project.metadata?.verifierRewardAmount || 0;
+          
+          if (verifierRewardAmount > 0) {
+            console.log(`Minting ${verifierRewardAmount} tokens to verifier ${verifier.walletAddress}`);
+            verifierRewardResult = await blockchainService.mintVerifierReward(
+              blockchainResult.tokenId,
+              verifier.walletAddress,
+              verifierRewardAmount
+            );
+            console.log('Verifier reward minted successfully:', verifierRewardResult);
+          } else {
+            console.warn('Verifier reward amount is 0 or not set. Skipping verifier reward minting.');
+          }
+        }
+      } catch (verifierRewardError) {
+        console.error('Failed to mint verifier reward:', verifierRewardError);
+        // Don't fail the entire approval if verifier reward minting fails
+        // The project is already registered and NFT is minted
+      }
 
       res.json({
         success: true,
-        message: "Project approved and registered on blockchain successfully.",
+        message: `Project approved and registered on blockchain successfully. NFT minted to owner (${ownerAddress}). ${project.Carbon_Credits_Issued} BCARB tokens minted to owner.`,
         verification,
         blockchainResult,
+        verifierReward: verifierRewardResult,
+        ownerReward: {
+          address: ownerAddress,
+          tokensMinted: project.Carbon_Credits_Issued,
+          nftTokenId: blockchainResult.tokenId
+        },
         project: {
           id: project._id,
           status: project.status,
@@ -192,7 +285,8 @@ exports.approveProject = async (req, res) => {
       console.error("Blockchain registration failed:", blockchainError);
       
       // Still save the verification but mark blockchain registration as failed
-      project.status = "Verified";
+      // Use "APPROVED" for Evidence model (which is what Project refers to)
+      project.status = "APPROVED";
       project.blockchain = {
         isRegistered: false,
         registrationError: blockchainError.message,
@@ -293,10 +387,11 @@ exports.retryBlockchainRegistration = async (req, res) => {
       });
     }
 
-    if (project.status !== "Verified") {
+    // Check if project is approved (Evidence model uses "APPROVED", not "Verified")
+    if (project.status !== "APPROVED" && project.status !== "Approved") {
       return res.status(400).json({ 
         success: false, 
-        message: "Project must be verified to register on blockchain." 
+        message: "Project must be approved/verified to register on blockchain." 
       });
     }
 
@@ -304,6 +399,15 @@ exports.retryBlockchainRegistration = async (req, res) => {
       return res.status(400).json({ 
         success: false, 
         message: "Project is already registered on blockchain." 
+      });
+    }
+
+    // Attach owner wallet address - REQUIRED for minting tokens to owner
+    const ownerAddress = project.ownerWalletAddress || project.metadata?.ownerAddress;
+    if (!ownerAddress || typeof ownerAddress !== 'string' || ownerAddress.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Project owner wallet address is required. Cannot register project on blockchain without owner address."
       });
     }
 
@@ -342,7 +446,8 @@ exports.retryBlockchainRegistration = async (req, res) => {
       averageLength: project.averageLength || '',
       averageBreadth: project.averageBreadth || '',
       seedlings: project.seedlings || '',
-      estimatedCO2Sequestration: project.Carbon_Sequestration_tCO2 || project.estimatedCO2Sequestration || 0
+      estimatedCO2Sequestration: project.Carbon_Sequestration_tCO2 || project.estimatedCO2Sequestration || 0,
+      ownerAddress: ownerAddress  // Set owner address for blockchain registration
     };
 
     try {
@@ -431,7 +536,13 @@ exports.getVerificationHistory = async (req, res) => {
 // Get all verified projects
 exports.getVerifiedProjects = async (req, res) => {
   try {
-    const projects = await Project.find({ status: "Verified" })
+    // Evidence model uses "APPROVED", but also check for "Approved" for backward compatibility
+    const projects = await Project.find({ 
+      $or: [
+        { status: "APPROVED" },
+        { status: "Approved" }
+      ]
+    })
       .populate('createdBy', 'name email')
       .populate('assignedInspector', 'name email')
       .sort({ Verified_Date: -1 });

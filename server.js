@@ -27,6 +27,9 @@ app.use("/api/verification", require("./routes/verificationRoutes"));
 app.use("/api/transactions", require("./routes/transactionRoutes"));
 app.use("/api/progress", require("./routes/progressRoutes"));
 app.use("/api/dapp", require("./routes/dappRoutes"));
+app.use("/api/marketplace", require("./routes/marketplaceRoutes"));
+app.use("/api/activities", require("./routes/tradingMintingRoutes"));
+app.use("/api/admin", require("./routes/adminRoutes"));
 
 // MongoDB connect
 mongoose.connect(process.env.MONGODB_URI)

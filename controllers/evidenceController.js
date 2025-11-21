@@ -1,5 +1,6 @@
 const Evidence = require("../models/Evidence");
 const Project = require("../models/Project");
+const User = require("../models/User");
 const crypto = require("crypto");
 
 // Utility: create SHA256 hash of evidence JSON
@@ -99,11 +100,32 @@ exports.submitEvidence = async (req, res) => {
     // Generate hash for immutability
     const evidenceHash = generateHash(payload);
 
+    // Get owner wallet address from request body - REQUIRED
+    let ownerWalletAddress = req.body.ownerWalletAddress || req.body.ownerAddress;
+    
+    // If not provided in request body, try to get it from the user's profile
+    if (!ownerWalletAddress && req.user._id) {
+      const user = await User.findById(req.user._id);
+      if (user && user.walletAddress) {
+        ownerWalletAddress = user.walletAddress;
+      }
+    }
+
+    // Validate owner wallet address is present
+    if (!ownerWalletAddress || typeof ownerWalletAddress !== 'string' || ownerWalletAddress.trim().length === 0) {
+      return res.status(400).json({
+        message: "Owner wallet address is required. Please provide ownerAddress or ownerWalletAddress in the request, or ensure your user profile has a walletAddress set.",
+        error: "Missing owner wallet address"
+      });
+    }
+
     // Create the evidence document
     const evidence = await Evidence.create({
       ...payload,
       evidenceHash,
       inspector: req.user._id,
+      ownerWalletAddress: ownerWalletAddress.trim(), // Required - must be provided
+      createdBy: req.user._id,
     });
 
     const projectStamp = await Project.findOneAndUpdate(

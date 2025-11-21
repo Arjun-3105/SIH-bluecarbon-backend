@@ -4,11 +4,11 @@ const authMiddleware = require("../middlewares/authMiddleware");
 const roleMiddleware = require("../middlewares/roleMiddleware");
 const projectController = require("../controllers/projectController");
 
-// Register a new project (Register role only)
+// Register a new project (Owner, Inspector, or Verifier can register)
 router.post(
   "/register",
   authMiddleware,
-  roleMiddleware(["Owner", "Inspector"]),
+  roleMiddleware(["Owner", "Inspector", "Verifier", "Admin"]),
   projectController.registerProject
 );
 

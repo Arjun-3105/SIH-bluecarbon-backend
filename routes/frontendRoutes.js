@@ -17,7 +17,7 @@ router.post('/register-project', async (req, res) => {
     // Validate required fields
     const requiredFields = [
       'projectId', 'projectName', 'ecosystemType', 'organizationName',
-      'ownerName', 'email', 'area', 'treeCount', 'plantationSpecies'
+      'ownerName', 'ownerAddress', 'email', 'area', 'treeCount', 'plantationSpecies'
     ];
 
     for (const field of requiredFields) {
@@ -26,6 +26,13 @@ router.post('/register-project', async (req, res) => {
           error: `Missing required field: ${field}` 
         });
       }
+    }
+
+    // Additional validation for ownerAddress (wallet address)
+    if (!frontendData.ownerAddress || typeof frontendData.ownerAddress !== 'string' || frontendData.ownerAddress.trim().length === 0) {
+      return res.status(400).json({ 
+        error: 'ownerAddress (wallet) is required and must be a valid non-empty string for project registration.' 
+      });
     }
 
     // Validate plantation species array

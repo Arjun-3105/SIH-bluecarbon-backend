@@ -42,7 +42,7 @@ class BlockchainService {
    */
   getContractABI() {
     return [
-      "function registerProject(tuple(string projectId, string projectName, string ecosystemType, string stateUT, string district, string villagePanchayat, uint16 carbonCredits, bool isRetired, uint64 retirementDate, string retirementReason, uint8 status, address projectOwner, bytes32 ipfsHash) projectData, bytes32 ipfsHash) external returns (uint256)",
+      "function registerProject(string memory projectId, uint16 carbonCredits, address projectOwner, bytes32 ipfsHash) external returns (uint256)",
       "function retireCredits(uint256 tokenId, uint16 amount, string memory reason) external",
       "function updateProjectStatus(uint256 tokenId, uint8 newStatus) external",
       "function getProject(uint256 tokenId) external view returns (tuple(string projectId, string projectName, string ecosystemType, string stateUT, string district, string villagePanchayat, uint16 carbonCredits, bool isRetired, uint64 retirementDate, string retirementReason, uint8 status, address projectOwner, bytes32 ipfsHash))",
@@ -55,9 +55,13 @@ class BlockchainService {
       "function ownerOf(uint256 tokenId) external view returns (address)",
       "function balanceOf(address owner) external view returns (uint256)",
       "function tokenOfOwnerByIndex(address owner, uint256 index) external view returns (uint256)",
+      "function projects(uint256 tokenId) external view returns (tuple(string projectId, uint16 carbonCredits, uint8 status, bool isRetired, uint64 retirementDate, address projectOwner, bytes32 ipfsHash))",
+      "event ProjectRegistered(uint256 indexed tokenId, string indexed projectId, address indexed owner, uint256 carbonCredits)",
+      "function mintVerifierReward(uint256 tokenId, address verifierAddress, uint256 rewardAmount) external",
       "event ProjectRegistered(uint256 indexed tokenId, string indexed projectId, address indexed owner, uint256 carbonCredits)",
       "event CreditsRetired(uint256 indexed tokenId, string indexed projectId, uint256 amount, string reason)",
-      "event ProjectUpdated(uint256 indexed tokenId, string indexed projectId, string field, string newValue)"
+      "event ProjectUpdated(uint256 indexed tokenId, string indexed projectId, string field, string newValue)",
+      "event VerifierRewardMinted(uint256 indexed tokenId, address indexed verifier, uint256 amount)"
     ];
   }
 
@@ -79,32 +83,41 @@ class BlockchainService {
       // Convert IPFS hash to bytes32
       const ipfsHashBytes32 = ethers.keccak256(ethers.toUtf8Bytes(ipfsHash));
 
-      // Prepare project data for smart contract (optimized structure)
-      const contractProjectData = {
-        projectId: projectData.projectId,
-        projectName: projectData.projectName,
-        ecosystemType: projectData.ecosystemType,
-        stateUT: projectData.location.stateUT || '',
-        district: projectData.location.district || '',
-        villagePanchayat: projectData.location.villagePanchayat || '',
-        carbonCredits: Math.floor(projectData.estimatedCO2Sequestration || 0),
-        isRetired: false,
-        retirementDate: 0,
-        retirementReason: "",
-        status: 1, // VERIFIED status
-        projectOwner: ethers.ZeroAddress, // Will be set by contract
-        ipfsHash: ipfsHashBytes32
-      };
+      // Get owner address - this is critical for minting tokens to the correct owner
+      const ownerAddress = projectData.ownerAddress || projectData.ownerWalletAddress;
+      if (!ownerAddress || ownerAddress === ethers.ZeroAddress) {
+        throw new Error('Owner wallet address is required for project registration. Please ensure the project owner has provided their wallet address.');
+      }
+
+      // Validate owner address
+      if (!ethers.isAddress(ownerAddress)) {
+        throw new Error(`Invalid owner address: ${ownerAddress}`);
+      }
+
+      // Calculate carbon credits (ensure it fits in uint16: 0-65535)
+      const carbonCredits = Math.floor(projectData.estimatedCO2Sequestration || 0);
+      if (carbonCredits <= 0) {
+        throw new Error('Carbon credits must be greater than 0');
+      }
+      if (carbonCredits > 65535) {
+        throw new Error('Carbon credits exceed maximum value (65535). Please reduce the CO2 estimate.');
+      }
 
       // Estimate gas
       const gasEstimate = await this.contract.registerProject.estimateGas(
-        contractProjectData,
+        projectData.projectId,
+        carbonCredits,
+        ownerAddress,
         ipfsHashBytes32
       );
 
-      // Register project
+      // Register project - this will:
+      // 1. Mint NFT to projectOwner
+      // 2. Mint ERC20 tokens to projectOwner (carbonCredits * 1e18)
       const tx = await this.contract.registerProject(
-        contractProjectData,
+        projectData.projectId,
+        carbonCredits,
+        ownerAddress,
         ipfsHashBytes32,
         {
           gasLimit: gasEstimate * 2n, // Add buffer
@@ -417,6 +430,36 @@ class BlockchainService {
   }
 
   /**
+   * Get ERC20 token balance for an address (BlueCarbon token)
+   * @param {string} ownerAddress
+   * @returns {Promise<string>} balance formatted in tokens (not wei)
+   */
+  async getERC20Balance(ownerAddress) {
+    try {
+      if (!process.env.BLUECARBON_ADDRESS) {
+        throw new Error('BLUECARBON_ADDRESS not configured');
+      }
+
+      const erc20Abi = [
+        'function balanceOf(address owner) view returns (uint256)',
+        'function decimals() view returns (uint8)'
+      ];
+
+      const tokenContract = new ethers.Contract(process.env.BLUECARBON_ADDRESS, erc20Abi, this.provider);
+      const [raw, decimals] = await Promise.all([
+        tokenContract.balanceOf(ownerAddress),
+        tokenContract.decimals()
+      ]);
+
+      const formatted = ethers.formatUnits(raw, decimals);
+      return formatted;
+    } catch (error) {
+      console.error('Failed to get ERC20 balance:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get wallet balance
    * @returns {Promise<string>} Balance in ETH
    */
@@ -430,6 +473,137 @@ class BlockchainService {
       return ethers.formatEther(balance);
     } catch (error) {
       console.error('Failed to get wallet balance:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all NFTs owned by an address
+   * Note: This queries ProjectRegistered events to find all NFTs, then filters by owner
+   * @param {string} ownerAddress - Wallet address of the owner
+   * @returns {Promise<Array>} Array of NFT token IDs and details
+   */
+  async getOwnedNFTs(ownerAddress) {
+    try {
+      if (!this.contract) {
+        await this.initialize();
+      }
+
+      if (!ownerAddress || !ethers.isAddress(ownerAddress)) {
+        throw new Error('Invalid owner address');
+      }
+
+      const nfts = [];
+      const normalizedAddress = ownerAddress.toLowerCase();
+
+      // Query ProjectRegistered events to find all registered projects
+      const filter = this.contract.filters.ProjectRegistered();
+      const events = await this.contract.queryFilter(filter, 0, 'latest');
+
+      // Check ownership for each token
+      for (const event of events) {
+        try {
+          const tokenId = event.args.tokenId;
+          const owner = await this.contract.ownerOf(tokenId);
+          
+          if (owner.toLowerCase() === normalizedAddress) {
+            // Get project details
+            const project = await this.contract.projects(tokenId);
+            let tokenURI = '';
+            try {
+              tokenURI = await this.contract.tokenURI(tokenId);
+            } catch (e) {
+              console.warn(`Could not get tokenURI for token ${tokenId}:`, e.message);
+            }
+            
+            nfts.push({
+              tokenId: tokenId.toString(),
+              projectId: project.projectId,
+              carbonCredits: project.carbonCredits.toString(),
+              status: project.status,
+              isRetired: project.isRetired,
+              retirementDate: project.retirementDate.toString(),
+              tokenURI: tokenURI,
+              transactionHash: event.transactionHash,
+              blockNumber: event.blockNumber
+            });
+          }
+        } catch (e) {
+          // Skip tokens that can't be accessed
+          console.warn(`Error processing token from event:`, e.message);
+          continue;
+        }
+      }
+
+      return nfts;
+    } catch (error) {
+      console.error('Failed to get owned NFTs:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Mint blue carbon tokens to verifier as reward for approving a project
+   * @param {string} tokenId - Token ID of the approved project
+   * @param {string} verifierAddress - Wallet address of the verifier
+   * @param {number} rewardAmount - Amount of tokens to mint (in tokens, will be scaled to 18 decimals)
+   * @returns {Promise<Object>} Transaction result
+   */
+  async mintVerifierReward(tokenId, verifierAddress, rewardAmount) {
+    try {
+      if (!this.contract) {
+        await this.initialize();
+      }
+
+      // Validate inputs
+      if (!verifierAddress || !ethers.isAddress(verifierAddress)) {
+        throw new Error('Invalid verifier address');
+      }
+
+      if (!rewardAmount || rewardAmount <= 0) {
+        throw new Error('Reward amount must be greater than 0');
+      }
+
+      // Convert tokenId to BigInt if it's a string
+      const tokenIdBigInt = typeof tokenId === 'string' ? BigInt(tokenId) : tokenId;
+      
+      // Convert rewardAmount to BigInt (will be scaled to 18 decimals in contract)
+      const rewardAmountBigInt = BigInt(Math.floor(rewardAmount));
+
+      // Estimate gas
+      const gasEstimate = await this.contract.mintVerifierReward.estimateGas(
+        tokenIdBigInt,
+        verifierAddress,
+        rewardAmountBigInt
+      );
+
+      // Mint tokens to verifier
+      const tx = await this.contract.mintVerifierReward(
+        tokenIdBigInt,
+        verifierAddress,
+        rewardAmountBigInt,
+        {
+          gasLimit: gasEstimate * 2n, // Add buffer
+          gasPrice: await this.provider.getGasPrice()
+        }
+      );
+
+      console.log('Verifier reward transaction sent:', tx.hash);
+      
+      // Wait for confirmation
+      const receipt = await tx.wait();
+      console.log('Verifier reward transaction confirmed in block:', receipt.blockNumber);
+
+      return {
+        success: true,
+        transactionHash: tx.hash,
+        blockNumber: receipt.blockNumber,
+        gasUsed: receipt.gasUsed.toString(),
+        verifierAddress,
+        rewardAmount: rewardAmount.toString()
+      };
+    } catch (error) {
+      console.error('Failed to mint verifier reward:', error);
       throw error;
     }
   }

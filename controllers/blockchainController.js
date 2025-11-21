@@ -1,3 +1,4 @@
+const { ethers } = require('ethers');
 const Project = require('../models/Project');
 const blockchainService = require('../utils/blockchainService');
 const ipfsService = require('../utils/ipfsUpload');
@@ -193,13 +194,23 @@ const getProjectFromBlockchain = async (req, res) => {
 
     // Get data from blockchain
     const blockchainData = await blockchainService.getProject(project.blockchain.tokenId);
+    // Optionally get owner's ERC20 balance
+    let ownerErc20Balance = null;
+    try {
+      if (blockchainData && blockchainData.projectOwner) {
+        ownerErc20Balance = await blockchainService.getERC20Balance(blockchainData.projectOwner);
+      }
+    } catch (e) {
+      console.warn('Failed to fetch owner ERC20 balance:', e.message || e);
+    }
 
     res.json({
       success: true,
       data: {
         database: project,
         blockchain: blockchainData,
-        ipfsMetadata: await ipfsService.getFromIPFS(project.blockchain.ipfsHash)
+        ipfsMetadata: await ipfsService.getFromIPFS(project.blockchain.ipfsHash),
+        ownerErc20Balance
       }
     });
   } catch (error) {
@@ -233,6 +244,27 @@ const getBlockchainStatistics = async (req, res) => {
       error: 'Failed to get blockchain statistics',
       details: error.message 
     });
+  }
+};
+
+/**
+ * Return token/contract addresses for frontend (to add to MetaMask)
+ */
+const getTokenInfo = async (req, res) => {
+  try {
+    res.json({
+      success: true,
+      data: {
+        registryContract: process.env.CONTRACT_ADDRESS || null,
+        erc20Token: process.env.BLUECARBON_ADDRESS || null,
+        erc20Symbol: process.env.BLUECARBON_SYMBOL || 'BCARB',
+        erc20Decimals: process.env.BLUECARBON_DECIMALS || 18,
+        network: process.env.SE_POLIA_NETWORK_NAME || 'sepolia'
+      }
+    });
+  } catch (error) {
+    console.error('Error getting token info:', error);
+    res.status(500).json({ success: false, message: 'Failed to get token info' });
   }
 };
 
@@ -342,6 +374,72 @@ const getTokenURI = async (req, res) => {
 };
 
 /**
+ * Get NFTs owned by an address
+ */
+const getOwnedNFTs = async (req, res) => {
+  try {
+    const { address } = req.params;
+
+    if (!address || !ethers.isAddress(address)) {
+      return res.status(400).json({ 
+        error: 'Invalid address',
+        details: 'Please provide a valid Ethereum address' 
+      });
+    }
+
+    const nfts = await blockchainService.getOwnedNFTs(address);
+
+    res.json({
+      success: true,
+      data: {
+        address,
+        nfts,
+        count: nfts.length
+      }
+    });
+  } catch (error) {
+    console.error('Error getting owned NFTs:', error);
+    res.status(500).json({ 
+      error: 'Failed to get owned NFTs',
+      details: error.message 
+    });
+  }
+};
+
+/**
+ * Get token balance for an address
+ */
+const getTokenBalance = async (req, res) => {
+  try {
+    const { address } = req.params;
+
+    if (!address || !ethers.isAddress(address)) {
+      return res.status(400).json({ 
+        error: 'Invalid address',
+        details: 'Please provide a valid Ethereum address' 
+      });
+    }
+
+    const balance = await blockchainService.getERC20Balance(address);
+
+    res.json({
+      success: true,
+      data: {
+        address,
+        balance,
+        symbol: 'BCARB'
+      }
+    });
+  } catch (error) {
+    console.error('Error getting token balance:', error);
+    res.status(500).json({ 
+      error: 'Failed to get token balance',
+      details: error.message 
+    });
+  }
+};
+
+/**
  * Sync project with blockchain data
  */
 const syncProjectWithBlockchain = async (req, res) => {
@@ -395,5 +493,8 @@ module.exports = {
   getBlockchainProjects,
   verifyProjectOnBlockchain,
   getTokenURI,
-  syncProjectWithBlockchain
+  getTokenInfo,
+  syncProjectWithBlockchain,
+  getOwnedNFTs,
+  getTokenBalance
 };

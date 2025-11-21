@@ -30,6 +30,9 @@ router.get('/verify/:projectId', blockchainController.verifyProjectOnBlockchain)
 // Get token URI for a project
 router.get('/token-uri/:projectId', blockchainController.getTokenURI);
 
+// Get token/contract info for frontend (MetaMask)
+router.get('/token-info', blockchainController.getTokenInfo);
+
 // Sync project with blockchain data
 router.post('/sync/:projectId', blockchainController.syncProjectWithBlockchain);
 

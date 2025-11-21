@@ -39,6 +39,7 @@ contract CarbonCreditRegistry is ERC721, Ownable, Pausable, ReentrancyGuard {
     event ProjectRegistered(uint256 indexed tokenId, string indexed projectId, address indexed owner, uint256 carbonCredits);
     event CreditsRetired(uint256 indexed tokenId, string indexed projectId, uint256 amount, string reason);
     event ERC20CreditsMinted(uint256 indexed tokenId, uint256 amount, address to);
+    event VerifierRewardMinted(uint256 indexed tokenId, address indexed verifier, uint256 amount);
 
     // Modifiers
     modifier onlyProjectOwner(uint256 tokenId) {
@@ -190,4 +191,27 @@ function verifyAndMint(uint256 tokenId) external onlyOwner projectExists(tokenId
 
     emit ERC20CreditsMinted(tokenId, amount, project.projectOwner);
 }
+
+    /**
+     * @dev Mint blue carbon tokens to verifier as reward for approving a project
+     * @param tokenId - The token ID of the approved project
+     * @param verifierAddress - The address of the verifier who approved the project
+     * @param rewardAmount - The amount of tokens to mint to the verifier (in tokens, will be scaled to 18 decimals)
+     */
+    function mintVerifierReward(
+        uint256 tokenId,
+        address verifierAddress,
+        uint256 rewardAmount
+    ) external onlyOwner projectExists(tokenId) whenNotPaused nonReentrant {
+        require(verifierAddress != address(0), "Invalid verifier address");
+        require(rewardAmount > 0, "Reward amount must be > 0");
+        
+        CarbonProjectOnChain storage project = projects[tokenId];
+        require(project.status == ProjectStatus.VERIFIED, "Project must be verified");
+
+        // Mint ERC20 tokens to verifier (scale to 18 decimals)
+        blueCarbon.mint(verifierAddress, rewardAmount * 1e18);
+
+        emit VerifierRewardMinted(tokenId, verifierAddress, rewardAmount);
+    }
 }
