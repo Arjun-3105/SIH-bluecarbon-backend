@@ -4,13 +4,13 @@ const mongoose = require('mongoose');
 const models = require('../models');  // import all models
 
 async function setupCollections() {
-  await connectDB();
-
   try {
+    await connectDB();
+    console.log('MONGODB_URI:', process.env.MONGODB_URI);
+
     for (const modelName in models) {
       const model = models[modelName];
       if (model && model.createCollection) {
-        console.log('MONGODB_URI:', process.env.MONGODB_URI);
         await model.createCollection();
         console.log(`${model.modelName} collection created or already exists.`);
       }
